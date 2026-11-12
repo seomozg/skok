@@ -17,7 +17,9 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "smoke": "node scripts/smoke-test.mjs"
+    "smoke": "node scripts/smoke-test.mjs",
+    "check:camera": "node scripts/camera-check.mjs",
+    "check:pose": "node scripts/pose-check.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.6.10",

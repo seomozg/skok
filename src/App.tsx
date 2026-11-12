@@ -8,6 +8,7 @@ import { GameLoop } from './core/engine/gameLoop';
 import { MediaPipePoseDetector } from './core/pose/mediapipePoseDetector';
 import type { PoseDetector } from './core/pose/poseDetector';
 import { detectPlatform } from './core/platform/platform';
+import { attachPoseDiagnostics } from './core/debug/poseDiagnostics';
 
 type AppPhase = 'menu' | 'loading' | 'game';
 
@@ -86,6 +87,12 @@ export function App() {
         setError(`Ошибка распознавания позы: ${message}`);
       });
       loopRef.current = loop;
+
+      // Диагностика детекции — только по явному флагу ?debug=1.
+      if (new URLSearchParams(window.location.search).has('debug')) {
+        attachPoseDiagnostics(loop);
+      }
+
       loop.start(video);
 
       setGameId(selectedGameId);

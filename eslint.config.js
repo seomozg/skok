@@ -16,6 +16,7 @@ export default tseslint.config(
         process: 'readonly',
         WebSocket: 'readonly',
         URL: 'readonly',
+        Buffer: 'readonly',
       },
     },
   },
