@@ -9,8 +9,10 @@
  *
  * Запуск: node scripts/smoke-test.mjs
  */
-import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { execFileSync, spawn } from 'node:child_process';
+import { existsSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const CHROME_CANDIDATES = [
@@ -21,7 +23,13 @@ const CHROME_CANDIDATES = [
 ];
 
 const APP_URL = process.env.SMOKE_URL ?? 'http://localhost:4173/';
-const PORT = 9333;
+const PORT = Number(process.env.SMOKE_PORT ?? 9333);
+
+/**
+ * Отдельный временный профиль: тест не должен использовать и не должен
+ * трогать профиль пользователя (и уже запущенный браузер).
+ */
+const PROFILE_DIR = join(tmpdir(), `skok-smoke-profile-${process.pid}`);
 
 const chromePath = CHROME_CANDIDATES.find((path) => existsSync(path));
 if (!chromePath) {
@@ -37,11 +45,43 @@ const chrome = spawn(chromePath, [
   '--use-fake-device-for-media-stream',
   '--use-fake-ui-for-media-stream',
   '--autoplay-policy=no-user-gesture-required',
-  '--user-data-dir=.tmp-chrome-profile',
+  `--user-data-dir=${PROFILE_DIR}`,
   'about:blank',
 ]);
 
 chrome.stderr.on('data', () => {});
+
+/**
+ * Завершает ТОЛЬКО запущенный нами экземпляр браузера.
+ *
+ * Никаких глобальных kill по имени процесса — это может убить обычный
+ * браузер пользователя. Убиваем по PID и только те процессы, в командной
+ * строке которых указан наш уникальный временный профиль.
+ */
+function cleanup() {
+  try {
+    chrome.kill();
+  } catch {
+    /* процесс уже завершён */
+  }
+  try {
+    const output = execFileSync('powershell.exe', [
+      '-NoProfile',
+      '-Command',
+      `Get-CimInstance Win32_Process -Filter "Name='chrome.exe' or Name='msedge.exe'" | Where-Object { $_.CommandLine -like '*${PROFILE_DIR}*' } | Select-Object -ExpandProperty ProcessId`,
+    ], { encoding: 'utf8' });
+    for (const pid of output.split(/\s+/).filter(Boolean)) {
+      execFileSync('taskkill.exe', ['/F', '/T', '/PID', pid], { stdio: 'ignore' });
+    }
+  } catch {
+    /* дочерние процессы могут завершиться сами */
+  }
+  try {
+    rmSync(PROFILE_DIR, { recursive: true, force: true, maxRetries: 3 });
+  } catch {
+    /* профиль мог остаться заблокированным — не критично */
+  }
+}
 
 async function waitForDevtools() {
   for (let i = 0; i < 60; i += 1) {
@@ -255,12 +295,12 @@ async function main() {
     squatState.error === null &&
     exceptions.length === 0;
   console.log(ok ? 'SMOKE OK' : 'SMOKE FAILED');
-  chrome.kill();
+  cleanup();
   process.exit(ok ? 0 : 1);
 }
 
 main().catch((error) => {
   console.error(error);
-  chrome.kill();
+  cleanup();
   process.exit(1);
 });

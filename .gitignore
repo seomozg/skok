@@ -26,4 +26,3 @@ android/app/release/
 
 # Временные файлы локальных проверок
 .tmp-*
-.tmp-chrome-profile/
