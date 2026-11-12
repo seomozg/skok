@@ -215,6 +215,29 @@ async function main() {
   }))()`);
   console.log('2) приложение:', JSON.stringify(app));
 
+  // 2a. Список камер доступен после запуска (браузер раскрыл подписи).
+  const cameraOptions = await evaluate(`(() => {
+    const select = document.querySelector('.camera-selector__select');
+    if (!select) return { present: false, options: [] };
+    return {
+      present: true,
+      options: [...select.options].map((o) => o.textContent),
+      value: select.value,
+    };
+  })()`);
+  console.log('2a) выбор камеры:', JSON.stringify(cameraOptions));
+
+  // 2b. Повторный запуск не должен падать с «камера занята».
+  await evaluate("document.querySelector('.button--ghost')?.click()");
+  await delay(2000);
+  await evaluate("document.querySelector('.button--game')?.click()");
+  await delay(10000);
+  const restarted = await evaluate(`(() => ({
+    hud: document.querySelector('.hud__title')?.textContent ?? null,
+    error: document.querySelector('.error__message')?.textContent ?? null,
+  }))()`);
+  console.log('2b) повторный запуск:', JSON.stringify(restarted));
+
   // 3. Диагностика детекции на живой камере.
   const diagnostics = await evaluate('window.__skokDiagnostics ?? null');
   console.log('3) детекция:', JSON.stringify(diagnostics));
@@ -249,6 +272,12 @@ async function main() {
   add('игра запущена', app.hud !== null, app.hud ?? '');
   add('FPS-счётчик работает', Boolean(app.fps), app.fps ?? '');
   add('ошибок приложения нет', app.error === null, app.error ?? '');
+  add('список камер доступен', cameraOptions.present === true, `${cameraOptions.options.length} шт.`);
+  add(
+    'повторный запуск без ошибки «камера занята»',
+    restarted.hud !== null && restarted.error === null,
+    restarted.error ?? restarted.hud ?? '',
+  );
   add('исключений нет', exceptions.length === 0);
   if (diagnostics) {
     add(

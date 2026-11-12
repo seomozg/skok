@@ -10,6 +10,8 @@ export interface CameraConstraints {
   facingMode?: 'user' | 'environment';
   width?: number;
   height?: number;
+  /** Конкретное устройство (deviceId). Если задано — используется вместо facingMode. */
+  deviceId?: string;
 }
 
 export interface CameraStream {
@@ -26,6 +28,16 @@ export interface CameraService {
   stop(): void;
   /** true, если камера активна. */
   isActive(): boolean;
+  /** Перечисляет доступные видеокамеры. */
+  listDevices(): Promise<CameraDevice[]>;
+}
+
+/** Описание видеокамеры, доступной системе. */
+export interface CameraDevice {
+  deviceId: string;
+  label: string;
+  /** true, если это камера, смотрящая на пользователя (фронтальная). */
+  isFrontFacing: boolean;
 }
 
 export type CameraErrorKind =
@@ -56,7 +68,7 @@ export function describeCameraError(error: unknown): string {
       case 'not-found':
         return 'Камера не найдена. Подключите камеру и обновите страницу.';
       case 'not-readable':
-        return 'Камера занята другим приложением. Закройте его и попробуйте снова.';
+        return 'Камера занята другим приложением или другой вкладкой. Закройте лишние вкладки Skok и другие приложения, использующие камеру, затем нажмите «Попробовать снова».';
       case 'insecure-context':
         return 'Камера доступна только по HTTPS (или на localhost).';
       case 'unsupported':

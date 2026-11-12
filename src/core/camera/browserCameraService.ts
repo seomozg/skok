@@ -1,6 +1,7 @@
 import {
   CameraError,
   type CameraConstraints,
+  type CameraDevice,
   type CameraService,
   type CameraStream,
 } from './cameraService';
@@ -29,24 +30,78 @@ export class BrowserCameraService implements CameraService {
       return this.toCameraStream(this.stream);
     }
 
-    const mediaConstraints: MediaStreamConstraints = {
-      video: {
-        facingMode: constraints.facingMode ?? 'user',
-        width: { ideal: constraints.width ?? 1280 },
-        height: { ideal: constraints.height ?? 720 },
-      },
-      audio: false,
+    const video: MediaTrackConstraints = {
+      width: { ideal: constraints.width ?? 1280 },
+      height: { ideal: constraints.height ?? 720 },
     };
-
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-    } catch (error) {
-      throw this.toCameraError(error);
+    if (constraints.deviceId) {
+      video.deviceId = { exact: constraints.deviceId };
+    } else {
+      video.facingMode = constraints.facingMode ?? 'user';
     }
 
-    this.stream = stream;
-    return this.toCameraStream(stream);
+    try {
+      this.stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
+    } catch (error) {
+      // Выбранная камера занята — пробуем другие доступные устройства.
+      const fallback = await this.startWithFallbackDevice(video, error);
+      if (fallback) {
+        this.stream = fallback;
+      } else {
+        throw this.toCameraError(error);
+      }
+    }
+
+    return this.toCameraStream(this.stream);
+  }
+
+  /**
+   * Перебирает остальные камеры, если основная недоступна.
+   * Возвращает поток первой устройства, которое удалось открыть.
+   */
+  private async startWithFallbackDevice(
+    video: MediaTrackConstraints,
+    originalError: unknown,
+  ): Promise<MediaStream | null> {
+    // deviceId с exact нельзя переиспользовать для другого устройства.
+    const requestedId =
+      typeof video.deviceId === 'object' && !Array.isArray(video.deviceId)
+        ? video.deviceId.exact
+        : undefined;
+    const devices = await this.listDevices();
+
+    for (const device of devices) {
+      if (device.deviceId === requestedId) {
+        continue;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { ...video, deviceId: { exact: device.deviceId }, facingMode: undefined },
+          audio: false,
+        });
+        return stream;
+      } catch {
+        /* это устройство тоже занято — пробуем следующее */
+      }
+    }
+
+    // Устройств нет или все заняты — возвращаем исходную ошибку.
+    void originalError;
+    return null;
+  }
+
+  async listDevices(): Promise<CameraDevice[]> {
+    if (!navigator.mediaDevices?.enumerateDevices) {
+      return [];
+    }
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    return devices
+      .filter((device) => device.kind === 'videoinput')
+      .map((device, index) => ({
+        deviceId: device.deviceId,
+        label: device.label || `Камера ${index + 1}`,
+        isFrontFacing: /front|user|face|фронт/i.test(device.label),
+      }));
   }
 
   stop(): void {

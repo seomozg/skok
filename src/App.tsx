@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ErrorOverlay } from './components/ErrorOverlay';
 import { GameMenu } from './components/GameMenu';
 import { GameScreen } from './components/GameScreen';
+import { CameraSelector } from './components/CameraSelector';
 import { BrowserCameraService } from './core/camera/browserCameraService';
-import { describeCameraError } from './core/camera/cameraService';
+import { describeCameraError, type CameraDevice } from './core/camera/cameraService';
 import { GameLoop } from './core/engine/gameLoop';
 import { MediaPipePoseDetector } from './core/pose/mediapipePoseDetector';
 import type { PoseDetector } from './core/pose/poseDetector';
@@ -25,6 +26,8 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [fps, setFps] = useState<number | null>(null);
   const [showSkeleton, setShowSkeleton] = useState(true);
+  const [devices, setDevices] = useState<CameraDevice[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
 
   // Платформа влияет на подсказки (ориентация, установка как PWA).
   const platform = useMemo(() => detectPlatform(), []);
@@ -32,6 +35,9 @@ export function App() {
 
   // Состояние активной игры публикуется из GameScreen для рендера.
   const gameStateRef = useRef<unknown>(null);
+
+  // Последняя выбранная игра — для повторной попытки после ошибки камеры.
+  const lastGameIdRef = useRef<string | null>(null);
 
   // Создаём сервисы один раз за жизненный цикл приложения.
   if (!cameraRef.current) {
@@ -64,6 +70,7 @@ export function App() {
   const startGame = useCallback(async (selectedGameId: string) => {
     setError(null);
     setPhase('loading');
+    lastGameIdRef.current = selectedGameId;
 
     const video = videoRef.current;
     const camera = cameraRef.current;
@@ -75,9 +82,26 @@ export function App() {
     }
 
     try {
-      const cameraStream = await camera.start({ facingMode: 'user' });
+      // Перед повторным запуском освобождаем предыдущий поток:
+      // иначе камера остаётся занятой самой собой (NotReadableError).
+      camera.stop();
+      loopRef.current?.stop();
+
+      const cameraStream = await camera.start(
+        selectedDeviceId
+          ? { deviceId: selectedDeviceId }
+          : { facingMode: 'user' },
+      );
       video.srcObject = cameraStream.stream;
       await video.play();
+
+      // После первого успешного запуска браузер раскрывает список камер —
+      // теперь пользователь может выбрать другое устройство.
+      const available = await camera.listDevices();
+      setDevices(available);
+      const activeTrack = cameraStream.stream.getVideoTracks()[0];
+      const activeDeviceId = activeTrack?.getSettings().deviceId ?? null;
+      setSelectedDeviceId(activeDeviceId);
 
       await detector.initialize();
 
@@ -102,7 +126,27 @@ export function App() {
       setError(describeCameraError(caught));
       setPhase('menu');
     }
-  }, []);
+  }, [selectedDeviceId]);
+
+  /** Повторная попытка: заново открывает камеру и запускает выбранную игру. */
+  const retry = useCallback(() => {
+    if (lastGameIdRef.current) {
+      void startGame(lastGameIdRef.current);
+    } else {
+      setError(null);
+    }
+  }, [startGame]);
+
+  /** Переключение камеры: освобождаем текущую и открываем выбранную. */
+  const selectDevice = useCallback(
+    async (deviceId: string) => {
+      setSelectedDeviceId(deviceId);
+      if (lastGameIdRef.current) {
+        await startGame(lastGameIdRef.current);
+      }
+    },
+    [startGame],
+  );
 
   const exitToMenu = useCallback(() => {
     stopEverything();
@@ -115,22 +159,35 @@ export function App() {
       <video ref={videoRef} className="app__video" playsInline muted autoPlay />
 
       {phase === 'game' && gameId ? (
-        <GameScreen
-          key={gameId}
-          gameId={gameId}
-          loopRef={loopRef}
-          videoRef={videoRef}
-          canvasRef={canvasRef}
-          gameStateRef={gameStateRef}
-          fps={fps}
-          showSkeleton={showSkeleton}
-          onExit={exitToMenu}
-        />
+        <>
+          <GameScreen
+            key={gameId}
+            gameId={gameId}
+            loopRef={loopRef}
+            videoRef={videoRef}
+            canvasRef={canvasRef}
+            gameStateRef={gameStateRef}
+            fps={fps}
+            showSkeleton={showSkeleton}
+            onExit={exitToMenu}
+          />
+          <CameraSelector
+            devices={devices}
+            selectedDeviceId={selectedDeviceId}
+            onSelect={(deviceId) => void selectDevice(deviceId)}
+          />
+        </>
       ) : (
         <>
           <GameMenu onSelect={startGame} disabled={phase === 'loading'} />
           {phase === 'loading' && <p className="app__loading">Запускаем камеру и модель…</p>}
-          {error && <ErrorOverlay message={error} onRetry={() => setError(null)} />}
+          {error && <ErrorOverlay message={error} onRetry={retry} />}
+          <CameraSelector
+            devices={devices}
+            selectedDeviceId={selectedDeviceId}
+            onSelect={(deviceId) => void selectDevice(deviceId)}
+            disabled={phase === 'loading'}
+          />
           {orientationHint && <p className="app__hint">{orientationHint}</p>}
           <label className="app__toggle">
             <input
