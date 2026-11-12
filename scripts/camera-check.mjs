@@ -11,7 +11,7 @@
  * Требуется запущенный продакшн-сервер: SMOKE_URL=http://localhost:4173/
  */
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -23,7 +23,7 @@ const CHROME_CANDIDATES = [
   'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
 ];
 
-const APP_URL = process.env.SMOKE_URL ?? 'http://localhost:4173/';
+const APP_URL = process.env.SMOKE_URL ?? 'http://localhost:4173/?debug=1';
 const PORT = Number(process.env.SMOKE_PORT ?? 9334);
 const PROFILE_DIR = join(tmpdir(), `skok-camera-check-${process.pid}`);
 
@@ -215,22 +215,53 @@ async function main() {
   }))()`);
   console.log('2) приложение:', JSON.stringify(app));
 
+  // 3. Диагностика детекции на живой камере.
+  const diagnostics = await evaluate('window.__skokDiagnostics ?? null');
+  console.log('3) детекция:', JSON.stringify(diagnostics));
+
   const exceptions = session.events
     .filter((event) => event.method === 'Runtime.exceptionThrown')
     .map((event) => event.params?.exceptionDetails?.text ?? 'exception');
-  console.log('3) исключения:', exceptions.length ? exceptions : 'нет');
+  console.log('4) исключения:', exceptions.length ? exceptions : 'нет');
+
+  // Скриншот живого кадра со скелетом.
+  const screenshot = await session.send(
+    'Page.captureScreenshot',
+    { format: 'png', captureBeyondViewport: false },
+    sessionId,
+  );
+  if (screenshot?.data) {
+    const shotPath = join(process.cwd(), '.tmp-camera-screenshot.png');
+    writeFileSync(shotPath, Buffer.from(screenshot.data, 'base64'));
+    console.log('скриншот:', shotPath);
+  }
 
   browserWs.close();
 
-  const ok =
-    camera.ok === true &&
-    camera.framesAdvance === true &&
-    app.hud !== null &&
-    app.error === null &&
-    exceptions.length === 0;
-  console.log(ok ? 'CAMERA CHECK OK' : 'CAMERA CHECK FAILED');
+  const checks = [];
+  const add = (name, passed, detail) => {
+    checks.push({ name, passed });
+    console.log(`${passed ? 'OK  ' : 'FAIL'} ${name}${detail ? ` — ${detail}` : ''}`);
+  };
+
+  add('камера отдаёт поток', camera.ok === true, camera.label);
+  add('кадры идут (currentTime растёт)', camera.framesAdvance === true);
+  add('игра запущена', app.hud !== null, app.hud ?? '');
+  add('FPS-счётчик работает', Boolean(app.fps), app.fps ?? '');
+  add('ошибок приложения нет', app.error === null, app.error ?? '');
+  add('исключений нет', exceptions.length === 0);
+  if (diagnostics) {
+    add(
+      'детектор обработал кадры',
+      diagnostics.frames > 10,
+      `${diagnostics.frames} кадров, человек в кадре: ${diagnostics.personDetected}`,
+    );
+  }
+
+  const failed = checks.filter((check) => !check.passed);
+  console.log(failed.length === 0 ? '\nCAMERA CHECK OK' : '\nCAMERA CHECK FAILED');
   cleanup();
-  process.exit(ok ? 0 : 1);
+  process.exit(failed.length === 0 ? 0 : 1);
 }
 
 main().catch((error) => {
