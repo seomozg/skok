@@ -26,7 +26,6 @@ export class GameLoop {
   private readonly bus = new EventBus<GameLoopEvents>();
   private readonly now: () => number;
   private rafId: number | null = null;
-  private videoFrameId: number | null = null;
   private lastFrameTimestamp = -1;
   private frameCount = 0;
   private fpsWindowStart = 0;
@@ -58,7 +57,12 @@ export class GameLoop {
     this.fpsWindowStart = this.now();
     this.frameCount = 0;
     this.lastFrameTimestamp = -1;
+    this.lastVideoTime = -1;
 
+    // Единый rAF-цикл: детектируем только когда кадр камеры реально сменился
+    // (сравниваем currentTime). Это работает и там, где
+    // requestVideoFrameCallback недоступен или не срабатывает
+    // (например, для скрытого <video> вне области видимости).
     const tick = () => {
       if (!this.running) {
         return;
@@ -67,24 +71,7 @@ export class GameLoop {
       this.rafId = requestAnimationFrame(tick);
     };
 
-    // requestVideoFrameCallback даёт кадры ровно тогда, когда пришёл новый
-    // кадр с камеры — это дешевле, чем детектировать в каждом rAF.
-    const videoWithCallback = video as HTMLVideoElement & {
-      requestVideoFrameCallback?: (cb: (now: number) => void) => number;
-    };
-
-    if (typeof videoWithCallback.requestVideoFrameCallback === 'function') {
-      const onVideoFrame = () => {
-        if (!this.running) {
-          return;
-        }
-        this.processFrame(video);
-        this.videoFrameId = videoWithCallback.requestVideoFrameCallback!(onVideoFrame);
-      };
-      this.videoFrameId = videoWithCallback.requestVideoFrameCallback(onVideoFrame);
-    } else {
-      this.rafId = requestAnimationFrame(tick);
-    }
+    this.rafId = requestAnimationFrame(tick);
   }
 
   stop(): void {
@@ -93,23 +80,12 @@ export class GameLoop {
       cancelAnimationFrame(this.rafId);
       this.rafId = null;
     }
-    if (this.videoFrameId !== null) {
-      const video = this.currentVideo;
-      const withCallback = video as (HTMLVideoElement & {
-        cancelVideoFrameCallback?: (id: number) => void;
-      }) | null;
-      withCallback?.cancelVideoFrameCallback?.(this.videoFrameId);
-      this.videoFrameId = null;
-    }
   }
 
-  private currentVideo: HTMLVideoElement | null = null;
-
   private processFrame(video: HTMLVideoElement): void {
-    this.currentVideo = video;
     const timestamp = this.now();
 
-    // Защита от повторной обработки одного и того же кадра.
+    // Кадр не изменился — детектировать нечего.
     if (video.currentTime === this.lastVideoTime && this.lastFrameTimestamp >= 0) {
       return;
     }

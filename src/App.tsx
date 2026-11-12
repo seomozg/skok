@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ErrorOverlay } from './components/ErrorOverlay';
 import { GameMenu } from './components/GameMenu';
 import { GameScreen } from './components/GameScreen';
@@ -7,6 +7,7 @@ import { describeCameraError } from './core/camera/cameraService';
 import { GameLoop } from './core/engine/gameLoop';
 import { MediaPipePoseDetector } from './core/pose/mediapipePoseDetector';
 import type { PoseDetector } from './core/pose/poseDetector';
+import { detectPlatform } from './core/platform/platform';
 
 type AppPhase = 'menu' | 'loading' | 'game';
 
@@ -23,6 +24,10 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [fps, setFps] = useState<number | null>(null);
   const [showSkeleton, setShowSkeleton] = useState(true);
+
+  // Платформа влияет на подсказки (ориентация, установка как PWA).
+  const platform = useMemo(() => detectPlatform(), []);
+  const orientationHint = platform.orientationHint();
 
   // Состояние активной игры публикуется из GameScreen для рендера.
   const gameStateRef = useRef<unknown>(null);
@@ -77,6 +82,9 @@ export function App() {
 
       const loop = new GameLoop(detector);
       loop.on('fps', ({ value }) => setFps(value));
+      loop.on('error', ({ message }) => {
+        setError(`Ошибка распознавания позы: ${message}`);
+      });
       loopRef.current = loop;
       loop.start(video);
 
@@ -116,6 +124,7 @@ export function App() {
           <GameMenu onSelect={startGame} disabled={phase === 'loading'} />
           {phase === 'loading' && <p className="app__loading">Запускаем камеру и модель…</p>}
           {error && <ErrorOverlay message={error} onRetry={() => setError(null)} />}
+          {orientationHint && <p className="app__hint">{orientationHint}</p>}
           <label className="app__toggle">
             <input
               type="checkbox"

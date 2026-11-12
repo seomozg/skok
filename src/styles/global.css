@@ -53,6 +53,13 @@ body {
   font-size: 1rem;
 }
 
+.app__hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
 .app__toggle {
   display: flex;
   align-items: center;
