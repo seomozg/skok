@@ -1,0 +1,293 @@
+:root {
+  --bg: #0f1020;
+  --bg-soft: #191a33;
+  --fg: #f8fafc;
+  --muted: #a5b4fc;
+  --accent: #5eead4;
+  --accent-2: #f43f5e;
+  --radius: 16px;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+.app {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+
+.app__video {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  left: -9999px;
+}
+
+.app__loading {
+  color: var(--muted);
+  font-size: 1rem;
+}
+
+.app__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+/* --- Меню --- */
+
+.menu {
+  width: min(560px, 100%);
+  text-align: center;
+}
+
+.menu__title {
+  font-size: clamp(2.5rem, 12vw, 4rem);
+  margin: 0;
+  letter-spacing: 0.08em;
+  background: linear-gradient(120deg, var(--accent), #a78bfa);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.menu__subtitle {
+  color: var(--muted);
+  margin: 8px 0 24px;
+}
+
+.menu__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+/* --- Кнопки --- */
+
+.button {
+  width: 100%;
+  min-height: 56px;
+  padding: 14px 20px;
+  border: none;
+  border-radius: var(--radius);
+  background: linear-gradient(120deg, var(--accent), #34d399);
+  color: #06281f;
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.1s ease, filter 0.15s ease;
+}
+
+.button:active {
+  transform: scale(0.98);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.button--ghost {
+  background: transparent;
+  border: 2px solid var(--accent);
+  color: var(--accent);
+}
+
+.button--game {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  background: var(--bg-soft);
+  color: var(--fg);
+  border: 2px solid transparent;
+}
+
+.button--game:hover {
+  border-color: var(--accent);
+}
+
+.button__title {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.button__description {
+  font-size: 0.95rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* --- Игровой экран --- */
+
+.game-screen {
+  position: relative;
+  width: min(720px, 100%);
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #000;
+}
+
+.stage__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.stage__overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 1.05rem;
+  text-align: center;
+  padding: 24px;
+}
+
+/* --- HUD --- */
+
+.hud {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0 0;
+}
+
+.hud__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hud__row--main {
+  align-items: center;
+}
+
+.hud__title {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.hud__fps {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.hud__score {
+  font-size: 3rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.hud__timer {
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.hud__hint {
+  margin: 0;
+  color: #fbbf24;
+  font-size: 0.95rem;
+}
+
+/* --- Результаты и ошибки --- */
+
+.result {
+  width: min(420px, 100%);
+  text-align: center;
+  background: var(--bg-soft);
+  padding: 32px 24px;
+  border-radius: var(--radius);
+  display: grid;
+  gap: 12px;
+}
+
+.result__title {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+.result__game {
+  margin: 0;
+  color: var(--muted);
+}
+
+.result__score {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.result__actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.error {
+  width: min(420px, 100%);
+  padding: 20px;
+  border-radius: var(--radius);
+  background: rgba(244, 63, 94, 0.12);
+  border: 2px solid var(--accent-2);
+  display: grid;
+  gap: 12px;
+  text-align: center;
+}
+
+.error__message {
+  margin: 0;
+  line-height: 1.4;
+}
+
+@media (max-width: 480px) {
+  .hud__score {
+    font-size: 2.4rem;
+  }
+
+  .hud__timer {
+    font-size: 1.6rem;
+  }
+}

@@ -1,0 +1,16 @@
+node_modules/
+dist/
+dist-ssr/
+coverage/
+*.local
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.log
+npm-debug.log*
+*.tsbuildinfo
+
+# Локальные офлайн-ресурсы MediaPipe (генерируются скриптом npm run assets)
+public/mediapipe/
+public/models/
