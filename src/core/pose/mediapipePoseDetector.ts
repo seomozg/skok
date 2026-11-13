@@ -1,5 +1,5 @@
 import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
-import { emptyPoseFrame, type PoseDetector } from './poseDetector';
+import { emptyPoseFrame, type PoseDetectionSource, type PoseDetector } from './poseDetector';
 import type { Landmark, PoseFrame } from '../../domain/pose/poseTypes';
 
 export interface MediaPipePoseDetectorOptions {
@@ -19,6 +19,11 @@ const DEFAULT_WASM_PATH = '/mediapipe/wasm';
  *
  * Ресурсы по умолчанию берутся локально (public/models, public/mediapipe),
  * чтобы приложение полностью работало офлайн и не отправляло ничего наружу.
+ *
+ * Режим VIDEO используется для основного цикла: он быстрее и даёт
+ * стабильное слежение за человеком. При смене угла поворота кадра трекер
+ * нужно пересоздать — иначе он «залипает» на позе из прошлого кадра
+ * (проверено пробами: наклон перестаёт меняться при любом повороте).
  */
 export class MediaPipePoseDetector implements PoseDetector {
   private landmarker: PoseLandmarker | null = null;
@@ -38,7 +43,7 @@ export class MediaPipePoseDetector implements PoseDetector {
     return this.initPromise;
   }
 
-  detect(source: HTMLVideoElement, timestampMs: number): PoseFrame {
+  detect(source: PoseDetectionSource, timestampMs: number): PoseFrame {
     const landmarker = this.landmarker;
     if (!landmarker) {
       return emptyPoseFrame(timestampMs);
@@ -55,6 +60,19 @@ export class MediaPipePoseDetector implements PoseDetector {
       visibility: point.visibility ?? 1,
     }));
     return { landmarks, timestamp: timestampMs, empty: false };
+  }
+
+  /**
+   * Пересоздаёт ландмаркер, сбрасывая состояние трекинга.
+   *
+   * После смены угла поворота кадра старый трекер продолжает выдавать позу
+   * из прошлого кадра, поэтому его нужно пересоздать.
+   */
+  async reset(): Promise<void> {
+    this.landmarker?.close();
+    this.landmarker = null;
+    this.initPromise = null;
+    await this.initialize();
   }
 
   close(): void {

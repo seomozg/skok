@@ -6,10 +6,20 @@ export interface HUDProps {
   onStop: () => void;
   /** Дополнительная подсказка (например, фаза калибровки). */
   hint?: string | null;
+  /** Ручной поворот картинки — запасной вариант, если ориентация определена неверно. */
+  onRotate?: () => void;
 }
 
 /** Счёт, таймер, FPS и кнопка остановки. */
-export function HUD({ title, score, timeLeftMs, fps, onStop, hint }: HUDProps) {
+export function HUD({
+  title,
+  score,
+  timeLeftMs,
+  fps,
+  onStop,
+  hint,
+  onRotate,
+}: HUDProps) {
   const seconds = Math.max(0, Math.ceil(timeLeftMs / 1000));
   return (
     <header className="hud">
@@ -26,9 +36,16 @@ export function HUD({ title, score, timeLeftMs, fps, onStop, hint }: HUDProps) {
         </span>
       </div>
       {hint && <p className="hud__hint">{hint}</p>}
-      <button type="button" className="button button--ghost" onClick={onStop}>
-        Стоп
-      </button>
+      <div className="hud__row hud__row--actions">
+        {onRotate && (
+          <button type="button" className="button button--ghost" onClick={onRotate}>
+            Повернуть
+          </button>
+        )}
+        <button type="button" className="button button--ghost" onClick={onStop}>
+          Стоп
+        </button>
+      </div>
     </header>
   );
 }

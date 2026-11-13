@@ -20,6 +20,8 @@ export interface PoseDiagnostics {
   frames: number;
   /** true, если человек найден в кадре. */
   personDetected: boolean;
+  /** Применённый угол поворота кадра (по часовой стрелке). */
+  rotation: number;
 }
 
 declare global {
@@ -44,8 +46,15 @@ export function attachPoseDiagnostics(loop: GameLoop): () => void {
     rightWrist: null,
     frames: 0,
     personDetected: false,
+    rotation: 0,
   };
   window.__skokDiagnostics = diagnostics;
+
+  // Угол поворота приходит отдельным событием: он меняется один раз.
+  const unsubscribeRotation = loop.on('rotation', ({ value }) => {
+    diagnostics.rotation = value;
+  });
+  diagnostics.rotation = loop.rotation;
 
   const unsubscribe = loop.on('pose', (frame: PoseFrame) => {
     diagnostics.frames += 1;
@@ -86,6 +95,7 @@ export function attachPoseDiagnostics(loop: GameLoop): () => void {
 
   return () => {
     unsubscribe();
+    unsubscribeRotation();
     delete window.__skokDiagnostics;
   };
 }

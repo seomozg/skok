@@ -4,6 +4,7 @@ import { GameMenu } from './components/GameMenu';
 import { GameScreen } from './components/GameScreen';
 import { CameraSelector } from './components/CameraSelector';
 import { BrowserCameraService } from './core/camera/browserCameraService';
+import { FrameSource } from './core/camera/frameSource';
 import { describeCameraError, type CameraDevice } from './core/camera/cameraService';
 import { GameLoop } from './core/engine/gameLoop';
 import { MediaPipePoseDetector } from './core/pose/mediapipePoseDetector';
@@ -20,6 +21,8 @@ export function App() {
 
   const cameraRef = useRef<BrowserCameraService | null>(null);
   const detectorRef = useRef<PoseDetector | null>(null);
+  // Источник кадров: в нём картинка поворачивается в единственном месте.
+  const frameSourceRef = useRef<FrameSource | null>(null);
 
   const [phase, setPhase] = useState<AppPhase>('menu');
   const [gameId, setGameId] = useState<string | null>(null);
@@ -45,6 +48,9 @@ export function App() {
   }
   if (!detectorRef.current) {
     detectorRef.current = new MediaPipePoseDetector();
+  }
+  if (!frameSourceRef.current) {
+    frameSourceRef.current = new FrameSource();
   }
 
   const stopEverything = useCallback(() => {
@@ -105,7 +111,14 @@ export function App() {
 
       await detector.initialize();
 
-      const loop = new GameLoop(detector);
+      const frameSource = frameSourceRef.current;
+      if (!frameSource) {
+        setError('Внутренняя ошибка инициализации.');
+        setPhase('menu');
+        return;
+      }
+
+      const loop = new GameLoop(detector, { frameSource });
       loop.on('fps', ({ value }) => setFps(value));
       loop.on('error', ({ message }) => {
         setError(`Ошибка распознавания позы: ${message}`);
@@ -164,8 +177,8 @@ export function App() {
             key={gameId}
             gameId={gameId}
             loopRef={loopRef}
-            videoRef={videoRef}
             canvasRef={canvasRef}
+            frameSourceRef={frameSourceRef}
             gameStateRef={gameStateRef}
             fps={fps}
             showSkeleton={showSkeleton}

@@ -236,6 +236,11 @@ body {
   align-items: center;
 }
 
+.hud__row--actions {
+  justify-content: flex-start;
+  gap: 8px;
+}
+
 .hud__title {
   font-size: 1.1rem;
   font-weight: 700;

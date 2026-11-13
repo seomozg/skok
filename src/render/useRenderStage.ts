@@ -1,11 +1,19 @@
 import { useEffect, type MutableRefObject } from 'react';
 import type { PoseFrame } from '../domain/pose/poseTypes';
+import type { FrameSource } from '../core/camera/frameSource';
 import { drawSkeleton } from './skeletonRenderer';
 import { drawGameLayer } from './gameRenderer';
 
 export interface RenderStageOptions {
   canvasRef: MutableRefObject<HTMLCanvasElement | null>;
-  videoRef: MutableRefObject<HTMLVideoElement | null>;
+  /**
+   * Источник кадров.
+   *
+   * Рендер рисует ровно тот канвас, который видел детектор, поэтому
+   * скелет всегда совпадает с картинкой. Угол поворота применён один
+   * раз — в источнике кадров.
+   */
+  frameSourceRef: MutableRefObject<FrameSource | null>;
   /** Последний кадр с позой (в «зеркальной» системе координат). */
   frameRef: MutableRefObject<PoseFrame | null>;
   /** Идентификатор активной игры для отрисовки игрового слоя. */
@@ -24,7 +32,7 @@ export interface RenderStageOptions {
 export function useRenderStage(options: RenderStageOptions): void {
   const {
     canvasRef,
-    videoRef,
+    frameSourceRef,
     frameRef,
     gameIdRef,
     gameStateRef,
@@ -36,8 +44,8 @@ export function useRenderStage(options: RenderStageOptions): void {
 
     const draw = () => {
       const canvas = canvasRef.current;
-      const video = videoRef.current;
-      if (canvas && video) {
+      const frameSource = frameSourceRef.current;
+      if (canvas && frameSource) {
         const ctx = canvas.getContext('2d');
         if (ctx) {
           const { width, height } = canvas;
@@ -47,7 +55,7 @@ export function useRenderStage(options: RenderStageOptions): void {
           ctx.save();
           ctx.translate(width, 0);
           ctx.scale(-1, 1);
-          ctx.drawImage(video, 0, 0, width, height);
+          ctx.drawImage(frameSource.element, 0, 0, width, height);
           ctx.restore();
 
           const frame = frameRef.current;
@@ -67,5 +75,5 @@ export function useRenderStage(options: RenderStageOptions): void {
 
     rafId = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(rafId);
-  }, [canvasRef, videoRef, frameRef, gameIdRef, gameStateRef, showSkeleton]);
+  }, [canvasRef, frameSourceRef, frameRef, gameIdRef, gameStateRef, showSkeleton]);
 }

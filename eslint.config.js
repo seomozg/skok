@@ -21,6 +21,26 @@ export default tseslint.config(
     },
   },
   {
+    // Браузерные страницы проб: выполняются внутри страницы, поэтому
+    // глобалы из браузера здесь законны.
+    files: ['scripts/probe-lib.js'],
+    languageOptions: {
+      globals: {
+        document: 'readonly',
+        window: 'readonly',
+        console: 'readonly',
+        performance: 'readonly',
+        requestAnimationFrame: 'readonly',
+        Image: 'readonly',
+        HTMLCanvasElement: 'readonly',
+        HTMLVideoElement: 'readonly',
+        HTMLImageElement: 'readonly',
+        navigator: 'readonly',
+        MediaStream: 'readonly',
+      },
+    },
+  },
+  {
     rules: {
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/no-explicit-any': 'off',

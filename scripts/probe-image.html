@@ -7,7 +7,7 @@
   <body>
     <script type="module">
       import { FilesetResolver, PoseLandmarker } from '/vision_bundle.mjs';
-      import { compose, drawVideo, summarize } from '/probe-lib.js';
+      import { compose, drawRotated, summarize } from '/probe-lib.js';
 
       /**
        * Калибровка угла поворота ОДНИМ детектором в IMAGE-режиме.
@@ -15,29 +15,32 @@
        * IMAGE-режим не ведёт трекинг между вызовами, поэтому результат
        * не зависит от порядка проверки углов. Это то, что нужно для
        * перебора 0/90/180/270 при старте.
+       *
+       * Дополнительно меряем стоимость пересоздания детектора (reset):
+       * от неё зависит, можно ли пересоздавать трекер на каждый угол.
        */
       async function main() {
         const result = { steps: [], images: [] };
-        const useCamera = new URLSearchParams(location.search).get('source') === 'camera';
-
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false,
-        });
-        const video = document.createElement('video');
-        video.srcObject = stream;
-        video.muted = true;
-        video.playsInline = true;
-        await video.play();
-        await new Promise((resolve) => {
-          const check = () => {
-            if (video.videoWidth > 0 && video.readyState >= 2) resolve();
-            else requestAnimationFrame(check);
-          };
-          check();
-        });
 
         const vision = await FilesetResolver.forVisionTasks('/wasm');
+
+        // Стоимость пересоздания детектора: от неё зависит, можно ли
+        // пересоздавать трекер на каждый угол при калибровке.
+        const recreateStarted = performance.now();
+        const warmup = await PoseLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: '/models/pose_landmarker_lite.task',
+            delegate: 'GPU',
+          },
+          runningMode: 'VIDEO',
+          numPoses: 1,
+        });
+        warmup.close();
+        result.steps.push({
+          name: 'create_cost',
+          elapsedMs: Math.round(performance.now() - recreateStarted),
+        });
+
         const landmarker = await PoseLandmarker.createFromOptions(vision, {
           baseOptions: {
             modelAssetPath: '/models/pose_landmarker_lite.task',
@@ -47,14 +50,18 @@
           numPoses: 1,
         });
 
+        const image = new Image();
+        image.src = '/fixtures/person.jpg';
+        await image.decode();
+
         for (const angle of [0, 90, 180, 270]) {
-          const canvas = drawVideo(video, angle);
+          const canvas = drawRotated(image, angle);
           const output = landmarker.detect(canvas);
           const landmarks = output.landmarks?.[0] ?? [];
           result.steps.push({ name: `image_${angle}`, ...summarize(landmarks) });
           result.images.push({
             name: `image_angle_${angle}`,
-            data: compose(drawVideo(video, angle), landmarks),
+            data: compose(drawRotated(image, angle), landmarks),
           });
         }
 

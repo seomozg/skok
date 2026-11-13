@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { HUD } from './HUD';
 import { CameraStage } from './CameraStage';
 import { ResultScreen } from './ResultScreen';
 import type { GameLoop } from '../core/engine/gameLoop';
+import type { FrameSource } from '../core/camera/frameSource';
 import { findGameById, NOOP_GAME } from '../games';
 import { useGameSession } from '../games/useGameSession';
 import { useRenderStage } from '../render/useRenderStage';
@@ -11,8 +12,9 @@ import type { PoseFrame } from '../domain/pose/poseTypes';
 export interface GameScreenProps {
   gameId: string;
   loopRef: React.MutableRefObject<GameLoop | null>;
-  videoRef: React.MutableRefObject<HTMLVideoElement | null>;
   canvasRef: React.MutableRefObject<HTMLCanvasElement | null>;
+  /** Источник кадров: повёрнутая картинка, которую видят детектор и рендер. */
+  frameSourceRef: React.MutableRefObject<FrameSource | null>;
   /** Публикуется наружу, чтобы App мог рисовать игровой слой. */
   gameStateRef: React.MutableRefObject<unknown>;
   fps: number | null;
@@ -28,8 +30,8 @@ export interface GameScreenProps {
 export function GameScreen({
   gameId,
   loopRef,
-  videoRef,
   canvasRef,
+  frameSourceRef,
   gameStateRef,
   fps,
   showSkeleton,
@@ -63,7 +65,7 @@ export function GameScreen({
 
   useRenderStage({
     canvasRef,
-    videoRef,
+    frameSourceRef,
     frameRef,
     gameIdRef,
     gameStateRef,
@@ -80,6 +82,11 @@ export function GameScreen({
     (session.state as { phase?: string }).phase === 'calibrating'
       ? 'Встаньте ровно — идёт калибровка'
       : null;
+
+  /** Ручной поворот картинки: запасной вариант к автоопределению ориентации. */
+  const rotate = useCallback(() => {
+    void loopRef.current?.rotateBy(90);
+  }, [loopRef]);
 
   if (session.state.status === 'finished') {
     return (
@@ -101,6 +108,7 @@ export function GameScreen({
         timeLeftMs={timeLeftMs}
         fps={fps}
         hint={hint}
+        onRotate={rotate}
         onStop={onExit}
       />
     </div>
