@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>Skok: проба MediaPipe на canvas</title>
+  </head>
+  <body>
+    <script type="module">
+      import { FilesetResolver, PoseLandmarker } from '/vision_bundle.mjs';
+      import {
+        compose,
+        drawRotated,
+        meanDeviation,
+        rotateNormalized,
+        summarize,
+      } from '/probe-lib.js';
+
+      async function loadImage(src) {
+        const image = new Image();
+        image.src = src;
+        await image.decode();
+        return image;
+      }
+
+      async function main() {
+        const result = { steps: [], images: [] };
+        const record = (name, data) => {
+          result.steps.push({ name, ...data });
+        };
+
+        const image = await loadImage('/fixtures/person.jpg');
+        const vision = await FilesetResolver.forVisionTasks('/wasm');
+
+        const landmarker = await PoseLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: '/models/pose_landmarker_lite.task',
+            delegate: 'GPU',
+          },
+          runningMode: 'VIDEO',
+          numPoses: 1,
+        });
+
+        let timestamp = 0;
+        const detect = (source, options) => {
+          timestamp += 1;
+          const output = landmarker.detectForVideo(source, timestamp, options);
+          const landmarks = output.landmarks?.[0] ?? [];
+          return { summary: summarize(landmarks), landmarks };
+        };
+
+        // --- Шаг 1: эталон — детекция на <video> (текущий путь приложения).
+        const uprightCanvas = drawRotated(image, 0);
+        const stream = uprightCanvas.captureStream(30);
+        const video = document.createElement('video');
+        video.srcObject = stream;
+        video.muted = true;
+        video.playsInline = true;
+        await video.play();
+        await new Promise((resolve) => {
+          const check = () => {
+            if (video.videoWidth > 0 && video.readyState >= 2) {
+              resolve();
+            } else {
+              requestAnimationFrame(check);
+            }
+          };
+          check();
+        });
+        const videoResult = detect(video);
+        record('video_upright', videoResult.summary);
+        result.images.push({ name: 'video_upright', data: compose(uprightCanvas, videoResult.landmarks) });
+
+        // --- Шаг 2: главный вопрос — принимает ли MediaPipe canvas.
+        try {
+          const canvasResult = detect(uprightCanvas);
+          record('canvas_upright', canvasResult.summary);
+          result.images.push({
+            name: 'canvas_upright',
+            data: compose(drawRotated(image, 0), canvasResult.landmarks),
+          });
+        } catch (error) {
+          record('canvas_upright_error', { error: String(error) });
+        }
+
+        // --- Шаг 3: canvas с ручным поворотом — эталон для сравнения.
+        //
+        // Главный вопрос: в какой системе координат MediaPipe возвращает
+        // точки для повёрнутого канваса?
+        //   expectedRotated — точки прямого кадра, повёрнутые математически;
+        //   deviationToRotated — насколько реальные точки от неё отличаются.
+        // Если отклонение большое, значит MediaPipe ведёт свою нумерацию
+        // точек (например, «левый» относительно повёрнутого кадра).
+        const reference = videoResult.landmarks;
+        for (const angle of [90, 180, 270]) {
+          const canvas = drawRotated(image, angle);
+          try {
+            const rotated = detect(canvas);
+            const expected = reference.map((point) => {
+              const moved = rotateNormalized(point.x, point.y, angle);
+              return { x: moved.x, y: moved.y };
+            });
+            record(`canvas_rotated_${angle}`, {
+              ...rotated.summary,
+              deviationToRotated: meanDeviation(rotated.landmarks, expected),
+              deviationToStraight: meanDeviation(rotated.landmarks, reference),
+            });
+            result.images.push({
+              name: `canvas_rotated_${angle}`,
+              data: compose(canvas, rotated.landmarks),
+            });
+          } catch (error) {
+            record(`canvas_rotated_${angle}_error`, { error: String(error) });
+          }
+        }
+
+        // --- Шаг 4: встроенный поворот MediaPipe (ImageProcessingOptions).
+        for (const angle of [90, 180, 270]) {
+          try {
+            const rotated = detect(uprightCanvas, { rotationDegrees: angle });
+            record(`rotationDegrees_${angle}`, rotated.summary);
+            result.images.push({
+              name: `rotationDegrees_${angle}`,
+              data: compose(drawRotated(image, 0), rotated.landmarks),
+            });
+          } catch (error) {
+            record(`rotationDegrees_${angle}_error`, { error: String(error) });
+          }
+        }
+
+        landmarker.close();
+        result.ok = true;
+        window.__probeResult = result;
+      }
+
+      main().catch((error) => {
+        window.__probeResult = { ok: false, error: String(error), steps: [], images: [] };
+      });
+    </script>
+  </body>
+</html>

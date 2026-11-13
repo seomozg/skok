@@ -242,6 +242,22 @@ async function main() {
   const diagnostics = await evaluate('window.__skokDiagnostics ?? null');
   console.log('3) детекция:', JSON.stringify(diagnostics));
 
+  // 3a. Исходный кадр камеры БЕЗ обработки — видно истинную ориентацию.
+  const rawFrame = await evaluate(`(() => {
+    const video = document.querySelector('video');
+    if (!video || !video.videoWidth) return null;
+    const c = document.createElement('canvas');
+    c.width = video.videoWidth;
+    c.height = video.videoHeight;
+    c.getContext('2d').drawImage(video, 0, 0);
+    return c.toDataURL('image/png');
+  })()`);
+  if (rawFrame) {
+    const rawPath = join(process.cwd(), '.tmp-raw-camera.png');
+    writeFileSync(rawPath, Buffer.from(rawFrame.split(',')[1], 'base64'));
+    console.log('3a) исходный кадр камеры:', rawPath);
+  }
+
   const exceptions = session.events
     .filter((event) => event.method === 'Runtime.exceptionThrown')
     .map((event) => event.params?.exceptionDetails?.text ?? 'exception');

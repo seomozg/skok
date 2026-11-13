@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>Skob: калибровка угла в IMAGE-режиме</title>
+  </head>
+  <body>
+    <script type="module">
+      import { FilesetResolver, PoseLandmarker } from '/vision_bundle.mjs';
+      import { compose, drawVideo, summarize } from '/probe-lib.js';
+
+      /**
+       * Калибровка угла поворота ОДНИМ детектором в IMAGE-режиме.
+       *
+       * IMAGE-режим не ведёт трекинг между вызовами, поэтому результат
+       * не зависит от порядка проверки углов. Это то, что нужно для
+       * перебора 0/90/180/270 при старте.
+       */
+      async function main() {
+        const result = { steps: [], images: [] };
+        const useCamera = new URLSearchParams(location.search).get('source') === 'camera';
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        });
+        const video = document.createElement('video');
+        video.srcObject = stream;
+        video.muted = true;
+        video.playsInline = true;
+        await video.play();
+        await new Promise((resolve) => {
+          const check = () => {
+            if (video.videoWidth > 0 && video.readyState >= 2) resolve();
+            else requestAnimationFrame(check);
+          };
+          check();
+        });
+
+        const vision = await FilesetResolver.forVisionTasks('/wasm');
+        const landmarker = await PoseLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: '/models/pose_landmarker_lite.task',
+            delegate: 'GPU',
+          },
+          runningMode: 'IMAGE',
+          numPoses: 1,
+        });
+
+        for (const angle of [0, 90, 180, 270]) {
+          const canvas = drawVideo(video, angle);
+          const output = landmarker.detect(canvas);
+          const landmarks = output.landmarks?.[0] ?? [];
+          result.steps.push({ name: `image_${angle}`, ...summarize(landmarks) });
+          result.images.push({
+            name: `image_angle_${angle}`,
+            data: compose(drawVideo(video, angle), landmarks),
+          });
+        }
+
+        landmarker.close();
+        result.ok = true;
+        window.__probeResult = result;
+      }
+
+      main().catch((error) => {
+        window.__probeResult = { ok: false, error: String(error), steps: [], images: [] };
+      });
+    </script>
+  </body>
+</html>

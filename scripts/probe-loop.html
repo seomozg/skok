@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>Skok: устойчивость трекинга на живом видео</title>
+  </head>
+  <body>
+    <script type="module">
+      import { FilesetResolver, PoseLandmarker } from '/vision_bundle.mjs';
+      import { compose, drawVideo, summarize } from '/probe-lib.js';
+
+      /**
+       * Проверяет, что ОДИН детектор на живой видеопоток (в offscreen-канвас,
+       * повёрнутый на фиксированный угол) ведёт себя стабильно:
+       *  - точки не «залипают» и следуют за картинкой;
+       *  - скелет остаётся на месте относительно человека.
+       */
+      async function main() {
+        const result = { steps: [], images: [] };
+        const angle = Number(new URLSearchParams(location.search).get('angle') ?? '270');
+        const frames = Number(new URLSearchParams(location.search).get('frames') ?? '30');
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        });
+        const video = document.createElement('video');
+        video.srcObject = stream;
+        video.muted = true;
+        video.playsInline = true;
+        await video.play();
+        await new Promise((resolve) => {
+          const check = () => {
+            if (video.videoWidth > 0 && video.readyState >= 2) resolve();
+            else requestAnimationFrame(check);
+          };
+          check();
+        });
+
+        const vision = await FilesetResolver.forVisionTasks('/wasm');
+        let detector = await PoseLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: '/models/pose_landmarker_lite.task',
+            delegate: 'GPU',
+          },
+          runningMode: 'VIDEO',
+          numPoses: 1,
+        });
+
+        const tilts = [];
+        let last = null;
+        const started = performance.now();
+
+        // Смена угла на живом видео: детектор ПЕРЕЗАПУСКАЕТСЯ.
+        // Проверяем, что после перезапуска трекинг восстанавливается
+        // и наклон снова соответствует новому углу.
+        const restartAt = Number(new URLSearchParams(location.search).get('restartAt') ?? '-1');
+
+        for (let index = 0; index < frames; index += 1) {
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+
+          if (index === restartAt) {
+            detector.close();
+            const fresh = await PoseLandmarker.createFromOptions(vision, {
+              baseOptions: {
+                modelAssetPath: '/models/pose_landmarker_lite.task',
+                delegate: 'GPU',
+              },
+              runningMode: 'VIDEO',
+              numPoses: 1,
+            });
+            // Пересоздаём детектор: переменная объявлена через let.
+            detector = fresh;
+            result.steps.push({ name: 'restart', at: index, angle });
+          }
+
+          const canvas = drawVideo(video, angle);
+          const output = detector.detectForVideo(canvas, index + 1);
+          const landmarks = output.landmarks?.[0] ?? [];
+          const summary = summarize(landmarks);
+          tilts.push(summary.bodyTilt ?? null);
+          last = { canvas, landmarks, summary, index };
+        }
+
+        detector.close();
+        const elapsed = performance.now() - started;
+
+        result.steps.push({
+          name: 'series',
+          angle,
+          frames,
+          elapsedMs: Math.round(elapsed),
+          detected: tilts.filter((tilt) => tilt !== null).length,
+          tilts,
+        });
+        result.images.push({
+          name: `loop_angle_${angle}`,
+          data: compose(last.canvas, last.landmarks),
+        });
+        result.ok = true;
+        window.__probeResult = result;
+      }
+
+      main().catch((error) => {
+        window.__probeResult = { ok: false, error: String(error), steps: [], images: [] };
+      });
+    </script>
+  </body>
+</html>
