@@ -263,7 +263,9 @@ async function main() {
   console.log('состояние:', JSON.stringify(state));
 
   // Вторая игра (Приседания): проверяем калибровку и подсказку.
-  await evaluate("document.querySelector('.button--ghost')?.click()");
+  // Кнопка «Стоп» ищется по своему классу: у кнопки «Повернуть» тоже
+  // есть общий класс button--ghost.
+  await evaluate("document.querySelector('.button--stop')?.click()");
   await delay(1500);
   await evaluate("[...document.querySelectorAll('.button--game')][1]?.click()");
   await delay(12000);

@@ -173,9 +173,21 @@ async function main() {
   };
 
   // 1. Настоящий getUserMedia: без подмены API, только реальная камера.
+  // Устройство можно задать переменной окружения CAMERA_LABEL —
+  // это нужно, когда камеру держит другое приложение.
   const camera = await evaluate(`(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const wanted = ${JSON.stringify(process.env.CAMERA_LABEL ?? '')};
+      let constraints = { video: true };
+      if (wanted) {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const match = devices.find((d) => d.kind === 'videoinput' && d.label.includes(wanted));
+        if (!match) {
+          return { ok: false, message: 'Камера «' + wanted + '» не найдена', devices: devices.map((d) => d.label) };
+        }
+        constraints = { video: { deviceId: { exact: match.deviceId } } };
+      }
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       const track = stream.getVideoTracks()[0];
       const settings = track.getSettings();
       const devices = await navigator.mediaDevices.enumerateDevices();
@@ -228,7 +240,9 @@ async function main() {
   console.log('2a) выбор камеры:', JSON.stringify(cameraOptions));
 
   // 2b. Повторный запуск не должен падать с «камера занята».
-  await evaluate("document.querySelector('.button--ghost')?.click()");
+  // Кнопка «Стоп» ищется по своему классу: у кнопки «Повернуть» тоже
+  // есть общий класс button--ghost.
+  await evaluate("document.querySelector('.button--stop')?.click()");
   await delay(2000);
   await evaluate("document.querySelector('.button--game')?.click()");
   await delay(10000);

@@ -105,8 +105,8 @@ async function runFrame(loop: GameLoop, video: FakeVideo): Promise<void> {
   await loop.processFrameForTest(video);
 }
 
-describe('GameLoop: определение ориентации кадра', () => {
-  it('определяет угол поворота по позе на сыром кадре', async () => {
+describe('GameLoop: обработка кадра', () => {
+  it('детектирует на канвасе источника, а не на <video>', async () => {
     const detector = new FakeDetector([sidewaysFrame(1)]);
     const frames = new FakeFrameProvider();
     const loop = new GameLoop(detector, { frameSource: frames, now: () => 1 });
@@ -114,39 +114,14 @@ describe('GameLoop: определение ориентации кадра', () 
 
     await runFrame(loop, video);
 
-    // Плечи правее таза: человек лежит на боку, кадр повёрнут на 270°.
-    expect(frames.currentRotation).toBe(270);
+    // Детектор всегда получает канвас источника: картинка поворачивается
+    // в одном месте, и этот же канвас видит рендер.
+    expect(detector.sources).toHaveLength(1);
+    expect(detector.sources[0]).toBe(frames.element);
   });
 
-  it('после калибровки детектирует на повёрнутом канвасе', async () => {
-    const detector = new FakeDetector([sidewaysFrame(1), sidewaysFrame(2)]);
-    const frames = new FakeFrameProvider();
-    const loop = new GameLoop(detector, { frameSource: frames, now: () => 1 });
-    const video = fakeVideo();
-
-    await runFrame(loop, video);
-    await runFrame(loop, video);
-
-    expect(detector.sources).toHaveLength(2);
-    // Детектор всегда получает канвас источника, а не <video>.
-    expect(detector.sources[1]).toBe(frames.element);
-  });
-
-  it('пересоздаёт трекер после смены угла', async () => {
+  it('показывает кадр сразу, без ожидания калибровки ориентации', async () => {
     const detector = new FakeDetector([sidewaysFrame(1)]);
-    const frames = new FakeFrameProvider();
-    const loop = new GameLoop(detector, { frameSource: frames, now: () => 1 });
-    const video = fakeVideo();
-
-    await runFrame(loop, video);
-
-    // Трекер «залипает» на старой позе, поэтому после смены угла
-    // его нужно пересоздать.
-    expect(detector.resets).toBe(1);
-  });
-
-  it('не показывает кадр до определения ориентации', async () => {
-    const detector = new FakeDetector([sidewaysFrame(1), sidewaysFrame(2)]);
     const frames = new FakeFrameProvider();
     const loop = new GameLoop(detector, { frameSource: frames, now: () => 1 });
     const video = fakeVideo();
@@ -155,14 +130,11 @@ describe('GameLoop: определение ориентации кадра', () 
     loop.on('pose', (frame) => poses.push(frame));
 
     await runFrame(loop, video);
-    // Первый кадр уходит на калибровку ориентации.
-    expect(poses).toHaveLength(0);
 
-    await runFrame(loop, video);
     expect(poses).toHaveLength(1);
   });
 
-  it('сообщает об угле поворота событием', async () => {
+  it('не определяет угол поворота сам — он задаётся вручную', async () => {
     const detector = new FakeDetector([sidewaysFrame(1)]);
     const frames = new FakeFrameProvider();
     const loop = new GameLoop(detector, { frameSource: frames, now: () => 1 });
@@ -173,18 +145,22 @@ describe('GameLoop: определение ориентации кадра', () 
 
     await runFrame(loop, video);
 
-    expect(rotations).toEqual([270]);
+    // Без нажатия кнопки угол не меняется и событие не приходит.
+    expect(rotations).toEqual([]);
+    expect(frames.currentRotation).toBe(0);
   });
 
-  it('при пустом кадре оставляет угол равным нулю', async () => {
-    const detector = new FakeDetector([]);
+  it('не пересоздаёт трекер при обычной обработке кадра', async () => {
+    const detector = new FakeDetector([sidewaysFrame(1), sidewaysFrame(2)]);
     const frames = new FakeFrameProvider();
     const loop = new GameLoop(detector, { frameSource: frames, now: () => 1 });
     const video = fakeVideo();
 
     await runFrame(loop, video);
+    await runFrame(loop, video);
 
-    expect(frames.currentRotation).toBe(0);
+    // Пересоздание нужно только при смене угла.
+    expect(detector.resets).toBe(0);
   });
 });
 
@@ -197,6 +173,22 @@ describe('GameLoop: ручной поворот', () => {
     await loop.rotateBy(90);
 
     expect(frames.currentRotation).toBe(90);
+    // Трекер «залипает» на старой позе, поэтому после смены угла
+    // его нужно пересоздать.
     expect(detector.resets).toBe(1);
+  });
+
+  it('сообщает о новом угле событием', async () => {
+    const detector = new FakeDetector([sidewaysFrame(1)]);
+    const frames = new FakeFrameProvider();
+    const loop = new GameLoop(detector, { frameSource: frames, now: () => 1 });
+
+    const rotations: number[] = [];
+    loop.on('rotation', ({ value }) => rotations.push(value));
+
+    await loop.rotateBy(90);
+    await loop.rotateBy(90);
+
+    expect(rotations).toEqual([90, 180]);
   });
 });

@@ -1,8 +1,4 @@
-import {
-  ROTATION_ANGLES,
-  type RotationAngle,
-  asRotationAngle,
-} from '../../domain/pose/orientation';
+import { type RotationAngle, asRotationAngle } from '../../domain/pose/orientation';
 
 /**
  * Источник кадров, от которого зависит игровой цикл.
@@ -105,10 +101,5 @@ export class FrameSource implements FrameProvider {
     context.rotate((this.rotation * Math.PI) / 180);
     context.drawImage(video, -sourceWidth / 2, -sourceHeight / 2, sourceWidth, sourceHeight);
     context.restore();
-  }
-
-  /** Все углы, которые может принять источник. */
-  static get angles(): readonly RotationAngle[] {
-    return ROTATION_ANGLES;
   }
 }

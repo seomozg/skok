@@ -38,11 +38,11 @@ export function HUD({
       {hint && <p className="hud__hint">{hint}</p>}
       <div className="hud__row hud__row--actions">
         {onRotate && (
-          <button type="button" className="button button--ghost" onClick={onRotate}>
+          <button type="button" className="button button--ghost button--rotate" onClick={onRotate}>
             Повернуть
           </button>
         )}
-        <button type="button" className="button button--ghost" onClick={onStop}>
+        <button type="button" className="button button--ghost button--stop" onClick={onStop}>
           Стоп
         </button>
       </div>

@@ -39,6 +39,10 @@ npm run dev          # http://localhost:5173 (доступен в локальн
 | `npm run smoke` | Smoke-тест в headless Chrome (нужен запущенный `npm run preview`) |
 | `npm run check:camera` | Проверка реальной камеры в headless Chrome (нужен запущенный `npm run preview`) |
 | `npm run check:pose` | Проверка распознавания позы на реальном человеке (нужен запущенный `npm run preview`) |
+| `npm run android:apk` | Собрать debug-APK через Gradle (нужны JDK 21 и Android SDK) |
+| `npm run android:install` | Собрать APK и поставить его на подключённый телефон |
+| `npm run android:run` | Поставить APK и запустить приложение на телефоне |
+| `npm run android:shot` | Снять скриншот с телефона в `.tmp-android.png` |
 
 ---
 
@@ -104,7 +108,9 @@ npm run smoke
 ```bash
 npm run cap:sync       # сборка веб-части + копирование в android/
 npm run cap:android    # открыть проект в Android Studio
-npm run android:apk    # собрать debug-APK через Gradle (нужны JDK 17 и Android SDK)
+npm run android:apk    # собрать debug-APK через Gradle (нужны JDK 21 и Android SDK)
+npm run android:install# собрать APK и поставить его на подключённый телефон
+npm run android:shot   # снять скриншот с телефона
 ```
 
 Что уже настроено:
@@ -120,12 +126,28 @@ npm run android:apk    # собрать debug-APK через Gradle (нужны 
 
 ### Требования для сборки Android
 
-- JDK 17 (Temurin), Android Studio (SDK 34+), переменные `JAVA_HOME` и `ANDROID_HOME`;
-- для установки на устройство — USB-отладка на телефоне;
+- **JDK 21** (Temurin) — Capacitor 7 собирается с `sourceCompatibility 21`,
+  поэтому JDK 17 даёт ошибку `invalid source release: 21`;
+- Android SDK: `platforms;android-35`, `build-tools;35.0.0`, `platform-tools`;
+- переменные `JAVA_HOME` и `ANDROID_HOME` (путь к SDK также записывается
+  в `android/local.properties` как `sdk.dir=...`);
+- для установки на устройство — USB-отладка на телефоне и подтверждённый
+  RSA-отпечаток ADB;
 - APK: `android/app/build/outputs/apk/debug/app-debug.apk`.
 
-> Сборку APK на этой машине выполнить не удалось: в окружении нет JDK и Android SDK.
-> Веб-часть и конфигурация нативного проекта проверены (`npm run cap:sync` проходит успешно).
+### Проверено на устройстве
+
+Debug-APK собран и установлен на **Pixel 9** (Android 17). Проверено фактически:
+
+- приложение стартует, меню и обе игры работают;
+- камера отдаёт кадры, MediaPipe работает внутри APK офлайн (~36 FPS);
+- скелет совпадает с картинкой, счёт и таймер обновляются.
+
+**Ориентация кадра.** Нативная камера Pixel 9 отдаёт кадр **прямым** —
+дополнительный поворот не требуется. Кнопка «Повернуть» в HUD остаётся
+на случай камер, которые отдают кадр в неправильной ориентации; угол
+задаётся только вручную, автоматического определения по позе нет намеренно:
+наклон человека не отличить от наклона самой камеры.
 
 ### Публикация
 

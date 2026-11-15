@@ -4,9 +4,6 @@ import type { PoseFrame } from '../../domain/pose/poseTypes';
 import { mirrorFrame } from '../../domain/pose/landmarks';
 import {
   type RotationAngle,
-  bodyTilt,
-  faceTilt,
-  rotationForTilt,
 } from '../../domain/pose/orientation';
 import { EventBus } from './eventBus';
 
@@ -42,7 +39,6 @@ export class GameLoop {
   private frameCount = 0;
   private fpsWindowStart = 0;
   private running = false;
-  private orientationResolved = false;
   /** Идёт ли обработка кадра: следующий кадр пропускается до её конца. */
   private processing = false;
   /** Последняя отметка времени детекции: должна строго возрастать. */
@@ -80,8 +76,10 @@ export class GameLoop {
    */
   async rotateBy(delta: number): Promise<void> {
     this.frameSource.rotateBy(delta);
+    // Трекер MediaPipe «залипает» на позе из прошлого кадра и перестаёт
+    // реагировать на поворот картинки, поэтому после смены угла его нужно
+    // пересоздать.
     await this.detector.reset();
-    this.orientationResolved = true;
     this.bus.emit('rotation', { value: this.frameSource.currentRotation });
   }
 
@@ -145,14 +143,6 @@ export class GameLoop {
     this.lastVideoTime = video.currentTime;
     this.lastFrameTimestamp = this.now();
 
-    // Ориентация определяется один раз, на первом кадре: угол — это
-    // свойство камеры, а не человека. Пока угол не известен, кадр
-    // показывать бессмысленно, поэтому этот кадр пропускаем.
-    if (!this.orientationResolved) {
-      await this.resolveOrientation(video);
-      return;
-    }
-
     // Картинка поворачивается ровно в одном месте, и уже этот канвас
     // видят и детектор, и рендер — поэтому скелет совпадает с картинкой.
     this.frameSource.capture(video);
@@ -186,39 +176,6 @@ export class GameLoop {
     return this.lastDetectionTimestamp;
   }
 
-  /**
-   * Определяет угол поворота кадра по позе на сыром кадре.
-   *
-   * Одна детекция вместо перебора четырёх углов: наклон тела в сыром
-   * кадре прямо говорит, на сколько градусов кадр повёрнут. Перебор
-   * углов потребовал бы пересоздавать трекер MediaPipe четыре раза, а это
-   * около 2,4 секунды на каждое пересоздание.
-   *
-   * Трекер после смены угла нужно пересоздать: он «залипает» на позе из
-   * прошлого кадра и перестаёт реагировать на поворот картинки.
-   */
-  private async resolveOrientation(video: HTMLVideoElement): Promise<void> {
-    this.frameSource.setRotation(0);
-    this.frameSource.capture(video);
-
-    let frame: PoseFrame;
-    try {
-      frame = this.detector.detect(this.frameSource.element, this.nextTimestamp());
-    } catch {
-      this.orientationResolved = true;
-      return;
-    }
-
-    const tilt = bodyTilt(frame.landmarks) ?? faceTilt(frame.landmarks);
-    this.frameSource.setRotation(tilt === null ? 0 : rotationForTilt(tilt));
-
-    // Смена угла требует свежего трекера.
-    await this.detector.reset();
-    this.frameSource.capture(video);
-
-    this.orientationResolved = true;
-    this.bus.emit('rotation', { value: this.frameSource.currentRotation });
-  }
 
   private lastVideoTime = -1;
 
