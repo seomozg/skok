@@ -30,6 +30,14 @@ const DEFAULT_DURATION_MS = 60_000;
 const DEFAULT_CALIBRATION_FRAMES = 20;
 
 /**
+ * Перцентиль, по которому берётся опорный угол стойки.
+ *
+ * 80-й перцентиль: выше среднего (стойка), но ниже максимума
+ * (который может быть выбросом детектора).
+ */
+export const CALIBRATION_PERCENTILE = 0.8;
+
+/**
  * Игра «Squat»: считает приседания по углу колена.
  *
  * Пороги не фиксированные (90°/160° из ТЗ), а калибруются под пользователя:
@@ -91,7 +99,12 @@ export class SquatGame implements GameModule<SquatGameState> {
     if (state.phase === 'calibrating') {
       state.calibrationSamples.push(angle);
       if (state.calibrationSamples.length >= this.calibrationFrames) {
-        const reference = average(state.calibrationSamples);
+        // Опорный угол берём по верхнему перцентилю, а не по среднему.
+        // Если в момент калибровки человек уже присел, среднее уходит
+        // вниз, порог становится недостижимым, и ни одно приседание
+        // не засчитывается до конца раунда. Верхний перцентиль отражает
+        // стойку даже тогда, когда часть кадров — это присед.
+        const reference = percentile(state.calibrationSamples, CALIBRATION_PERCENTILE);
         state.calibration = createSquatCalibration(reference);
         state.phase = 'up';
         state.calibrationSamples = [];
@@ -176,4 +189,21 @@ export function average(values: readonly number[]): number {
     return 0;
   }
   return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+/**
+ * Значение по заданному перцентилю (0..1).
+ *
+ * Сортирует копию — исходный массив не меняется.
+ */
+export function percentile(values: readonly number[], p: number): number {
+  if (values.length === 0) {
+    return 0;
+  }
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.min(
+    sorted.length - 1,
+    Math.max(0, Math.round((sorted.length - 1) * p)),
+  );
+  return sorted[index] ?? 0;
 }

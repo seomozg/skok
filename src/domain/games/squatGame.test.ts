@@ -139,6 +139,29 @@ describe('SquatGame', () => {
     expect(state.phase).toBe('calibrating');
     expect(state.calibration).toBeNull();
   });
+
+  it('калибруется по стойке, даже если в момент старта был присед', () => {
+    // Первые кадры — присед (угол 90°), дальше — стойка (170°).
+    // Опорный угол должен остаться около стойки, иначе порог «вниз»
+    // станет недостижимым и ни одно приседание не засчитается.
+    const game = new SquatGame({ calibrationFrames: 10 });
+    const state = game.createState();
+    game.start(state);
+
+    for (let i = 0; i < 4; i += 1) {
+      game.applyFrame(state, frameWithKneeAngle(90));
+    }
+    for (let i = 0; i < 6; i += 1) {
+      game.applyFrame(state, frameWithKneeAngle(170));
+    }
+
+    expect(state.calibration!.referenceAngle).toBeGreaterThan(150);
+
+    // Приседание должно засчитываться.
+    game.applyFrame(state, frameWithKneeAngle(100));
+    game.applyFrame(state, frameWithKneeAngle(170));
+    expect(state.score).toBe(1);
+  });
 });
 
 describe('average', () => {

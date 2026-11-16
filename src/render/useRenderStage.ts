@@ -84,7 +84,14 @@ export function useRenderStage(options: RenderStageOptions): void {
             // Кот — только в «Приседаниях», и только когда игрок встал
             // из приседа: рост счёта означает завершённое приседание.
             if (gameId === 'squat') {
-              drawCatForSquat(ctx, frame, gameStateRef.current, cat, lastScoreRef, width, height);
+              drawCatForSquat(
+                ctx,
+                gameStateRef.current,
+                cat,
+                lastScoreRef,
+                width,
+                height,
+              );
             }
           }
         }
@@ -98,12 +105,11 @@ export function useRenderStage(options: RenderStageOptions): void {
 }
 
 /**
- * Рисует кота над головой игрока и запускает удар, когда засчитано
+ * Рисует кота в правом верхнем углу и запускает удар, когда засчитано
  * приседание.
  */
 function drawCatForSquat(
   ctx: CanvasRenderingContext2D,
-  frame: PoseFrame,
   gameState: unknown,
   cat: ReturnType<typeof createCatAnimation>,
   lastScoreRef: { current: number },
@@ -122,18 +128,14 @@ function drawCatForSquat(
 
   const phase = updateCatAnimation(cat, now);
 
-  // Позиция кота — над головой игрока.
-  const head = frame.landmarks[0];
-  if (!head) {
-    return;
-  }
-  const headX = head.x * width;
-  const headY = head.y * height;
-  const size = Math.max(48, Math.min(width, height) * 0.16);
+  // Кот живёт в правом верхнем углу и не зависит от положения игрока.
+  const size = Math.max(96, Math.min(width, height) * 0.34);
+  const margin = size * 0.42;
 
   drawCat(ctx, {
-    x: headX,
-    y: headY - size * 0.35,
+    x: width - margin,
+    // Смещаем вниз, чтобы кот не перекрывал таймер в HUD.
+    y: margin + size * 0.55,
     size,
     phase,
     progress: hitProgress(cat, now),

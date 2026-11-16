@@ -19,10 +19,10 @@ export interface CatAnimation {
 }
 
 /** Длительность удара лапой, мс. */
-export const CAT_HIT_DURATION = 420;
+export const CAT_HIT_DURATION = 700;
 
 /** Длительность отскока после удара, мс. */
-export const CAT_RECOVER_DURATION = 320;
+export const CAT_RECOVER_DURATION = 400;
 
 /** Создаёт состояние анимации кота. */
 export function createCatAnimation(): CatAnimation {
@@ -207,21 +207,30 @@ export function drawCat(
   }
 
   // --- Ударная лапа ---
-  // В покое лапа прижата к телу, при ударе — короткий взмах сверху вниз
-  // по голове игрока. Якорь вынесен влево от тела, иначе лапа сливается
-  // с мордой кота и удар не читается.
+  // В покое лапа прижата к телу. При ударе она резко опускается вниз —
+  // именно это движение должно быть заметно.
   const swinging = phase === 'hit';
   const pawAngle = swinging
-    ? -Math.PI * 0.75 + progress * (Math.PI * 1.15)
-    : -Math.PI * 0.62;
-  const pawLength = half * (swinging ? 0.6 : 0.3);
-  const shoulderX = x - half * 0.4;
-  const shoulderY = bodyY - half * 0.22;
+    ? -Math.PI * 0.35 + progress * (Math.PI * 0.95)
+    : -Math.PI * 0.55;
+  const pawLength = half * (swinging ? 1.05 : 0.34);
+  const shoulderX = x - half * 0.45;
+  const shoulderY = bodyY - half * 0.28;
   const pawX = shoulderX + Math.cos(pawAngle) * pawLength;
   const pawY = shoulderY + Math.sin(pawAngle) * pawLength;
 
+  // След от лапы — показывает направление удара.
+  if (swinging && progress > 0.1) {
+    ctx.strokeStyle = 'rgba(251, 191, 36, 0.35)';
+    ctx.lineWidth = Math.max(2, size * 0.12);
+    ctx.beginPath();
+    ctx.moveTo(shoulderX, shoulderY);
+    ctx.lineTo(pawX, pawY);
+    ctx.stroke();
+  }
+
   ctx.strokeStyle = FUR;
-  ctx.lineWidth = Math.max(2, size * 0.16);
+  ctx.lineWidth = Math.max(3, size * 0.17);
   ctx.beginPath();
   ctx.moveTo(shoulderX, shoulderY);
   ctx.lineTo(pawX, pawY);
@@ -230,18 +239,18 @@ export function drawCat(
   // Лапа — округлая, а не точка: так она читается как лапа, а не палка.
   ctx.fillStyle = FUR;
   ctx.beginPath();
-  ctx.ellipse(pawX, pawY, half * 0.2, half * 0.17, pawAngle, 0, Math.PI * 2);
+  ctx.ellipse(pawX, pawY, half * 0.24, half * 0.2, pawAngle, 0, Math.PI * 2);
   ctx.fill();
 
   // В момент удара — «звёздочки» вокруг лапы: удар должен читаться.
-  if (phase === 'hit' && progress > 0.35) {
-    const starAlpha = Math.min(1, (progress - 0.35) / 0.3);
+  if (phase === 'hit' && progress > 0.3) {
+    const starAlpha = Math.min(1, (progress - 0.3) / 0.25);
     ctx.strokeStyle = `rgba(253, 230, 138, ${starAlpha})`;
-    ctx.lineWidth = Math.max(1.5, size * 0.035);
-    for (let i = 0; i < 5; i += 1) {
-      const angle = (i / 5) * Math.PI * 2 + progress * 2;
-      const r1 = half * 0.28;
-      const r2 = half * 0.42;
+    ctx.lineWidth = Math.max(2, size * 0.045);
+    for (let i = 0; i < 7; i += 1) {
+      const angle = (i / 7) * Math.PI * 2 + progress * 2;
+      const r1 = half * 0.32;
+      const r2 = half * 0.52;
       ctx.beginPath();
       ctx.moveTo(pawX + Math.cos(angle) * r1, pawY + Math.sin(angle) * r1);
       ctx.lineTo(pawX + Math.cos(angle) * r2, pawY + Math.sin(angle) * r2);
