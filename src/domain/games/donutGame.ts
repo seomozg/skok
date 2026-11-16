@@ -61,13 +61,13 @@ const DEFAULT_CALIBRATION_FRAMES = 20;
 const DEFAULT_MAX_TILT = 30;
 
 /** Радиус, в котором пончик считается пойманным ртом. */
-export const DONUT_CATCH_RADIUS = 0.13;
+export const DONUT_CATCH_RADIUS = 0.2;
 
 /** Насколько далеко от рта появляется пончик (в долях ширины экрана). */
 export const DONUT_SPAWN_OFFSET = 0.3;
 
 /** Скорость падения в начале раунда. */
-const START_SPEED = 0.3;
+const START_SPEED = 0.2;
 
 /** Насколько скорость растёт к концу раунда. */
 const SPEED_GROWTH = 0.5;
