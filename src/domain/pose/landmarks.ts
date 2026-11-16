@@ -105,9 +105,33 @@ export function getLandmark(
   return landmarks[index];
 }
 
-/** true, если точка существует и достаточно видна. */
+/**
+ * Порог видимости для точек ног.
+ *
+ * Намеренно мягче VISIBILITY_THRESHOLD: при приседании ноги частично
+ * закрывают друг друга и уходят за нижний край кадра, поэтому жёсткий
+ * порог теряет кадры именно в тот момент, когда угол колена меняется
+ * быстрее всего.
+ */
+export const LEG_VISIBILITY_THRESHOLD = 0.3;
+
+/**
+ * true, если точка существует и достаточно видна.
+ */
 export function isReliable(point: Landmark | undefined): point is Landmark {
   return point !== undefined && point.visibility >= VISIBILITY_THRESHOLD;
+}
+
+/**
+ * true, если точка пригодна для расчёта угла колена.
+ *
+ * Порог мягче: нога в кадре часто видна частично, и её координаты
+ * всё равно полезны — точнее, чем полное отсутствие угла.
+ */
+export function isUsableLegPoint(
+  point: Landmark | undefined,
+): point is Landmark {
+  return point !== undefined && point.visibility >= LEG_VISIBILITY_THRESHOLD;
 }
 
 /**

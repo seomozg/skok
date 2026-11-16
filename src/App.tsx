@@ -125,9 +125,14 @@ export function App() {
       });
       loopRef.current = loop;
 
-      // Диагностика детекции — только по явному флагу ?debug=1.
-      if (new URLSearchParams(window.location.search).has('debug')) {
-        attachPoseDiagnostics(loop);
+      // Диагностика детекции — по явному флагу ?debug=1 или по ключу
+      // в localStorage. Второй способ нужен автоматическим проверкам:
+      // CDP может включить диагностику на уже запущенном приложении.
+      const debugRequested =
+        new URLSearchParams(window.location.search).has('debug') ||
+        window.localStorage.getItem('skok.debug') === '1';
+      if (debugRequested) {
+        attachPoseDiagnostics(loop, gameStateRef);
       }
 
       loop.start(video);

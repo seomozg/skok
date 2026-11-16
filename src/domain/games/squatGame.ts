@@ -3,7 +3,7 @@ import {
   createSquatCalibration,
   type SquatCalibration,
 } from '../pose/calibration';
-import { PoseLandmark, isReliable } from '../pose/landmarks';
+import { PoseLandmark, isUsableLegPoint } from '../pose/landmarks';
 import type { PoseFrame } from '../pose/poseTypes';
 import type { BaseGameState, GameModule } from './gameModule';
 
@@ -163,7 +163,7 @@ export class SquatGame implements GameModule<SquatGameState> {
     const hip = frame.landmarks[hipIndex];
     const knee = frame.landmarks[kneeIndex];
     const ankle = frame.landmarks[ankleIndex];
-    if (!isReliable(hip) || !isReliable(knee) || !isReliable(ankle)) {
+    if (!isUsableLegPoint(hip) || !isUsableLegPoint(knee) || !isUsableLegPoint(ankle)) {
       return null;
     }
     return kneeAngle(hip, knee, ankle);
