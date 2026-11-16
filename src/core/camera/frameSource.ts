@@ -13,8 +13,6 @@ export interface FrameProvider {
   readonly currentRotation: RotationAngle;
   /** Копирует кадр видео в канвас с учётом поворота. */
   capture(video: HTMLVideoElement): void;
-  /** Устанавливает угол поворота. */
-  setRotation(rotation: RotationAngle): void;
   /** Добавляет поворот к текущему углу. */
   rotateBy(delta: number): void;
 }
@@ -54,11 +52,6 @@ export class FrameSource implements FrameProvider {
   /** Текущий угол поворота кадра (по часовой стрелке). */
   get currentRotation(): RotationAngle {
     return this.rotation;
-  }
-
-  /** Устанавливает угол поворота. */
-  setRotation(rotation: RotationAngle): void {
-    this.rotation = rotation;
   }
 
   /**

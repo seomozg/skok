@@ -22,11 +22,7 @@
     "test:watch": "vitest",
     "smoke": "node scripts/smoke-test.mjs",
     "check:camera": "node scripts/camera-check.mjs",
-    "check:pose": "node scripts/pose-check.mjs",
-    "probe:canvas": "node scripts/probe-canvas.mjs --page=probe-canvas.html",
-    "probe:rotate": "node scripts/probe-canvas.mjs --page=probe-rotate.html",
-    "probe:camera": "node scripts/probe-canvas.mjs --page=probe-camera.html",
-    "probe:loop": "node scripts/probe-canvas.mjs --page=probe-loop.html"
+    "check:pose": "node scripts/pose-check.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.6.10",

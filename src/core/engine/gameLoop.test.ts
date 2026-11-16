@@ -51,10 +51,6 @@ class FakeFrameProvider implements FrameProvider {
     this.captures += 1;
   }
 
-  setRotation(rotation: RotationAngle): void {
-    this.currentRotation = rotation;
-  }
-
   rotateBy(delta: number): void {
     this.currentRotation = (((this.currentRotation + delta) % 360) + 360) % 360 as RotationAngle;
   }
