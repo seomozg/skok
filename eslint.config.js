@@ -3,7 +3,16 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['dist', 'node_modules', 'public/mediapipe', 'public/models', 'android', 'ios'],
+    ignores: [
+      'dist',
+      'node_modules',
+      'public/mediapipe',
+      'public/models',
+      'android',
+      'ios',
+      // Артефакты предпросмотра (собираются скриптом cat-preview).
+      '.tmp-cat',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

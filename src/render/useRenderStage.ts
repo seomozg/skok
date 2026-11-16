@@ -1,8 +1,15 @@
-import { useEffect, type MutableRefObject } from 'react';
+import { useEffect, useRef, type MutableRefObject } from 'react';
 import type { PoseFrame } from '../domain/pose/poseTypes';
 import type { FrameSource } from '../core/camera/frameSource';
 import { drawSkeleton } from './skeletonRenderer';
 import { drawGameLayer } from './gameRenderer';
+import {
+  createCatAnimation,
+  drawCat,
+  hitProgress,
+  triggerCatHit,
+  updateCatAnimation,
+} from './catRenderer';
 
 export interface RenderStageOptions {
   canvasRef: MutableRefObject<HTMLCanvasElement | null>;
@@ -39,8 +46,15 @@ export function useRenderStage(options: RenderStageOptions): void {
     showSkeleton,
   } = options;
 
+  // Последний известный счёт — по нему определяется момент удара кота.
+  const lastScoreRef = useRef(0);
+
   useEffect(() => {
     let rafId = 0;
+
+    // Анимация кота живёт отдельно от React: она идёт по времени, а не
+    // по кадрам, поэтому не зависит от FPS.
+    const cat = createCatAnimation();
 
     const draw = () => {
       const canvas = canvasRef.current;
@@ -67,6 +81,11 @@ export function useRenderStage(options: RenderStageOptions): void {
             if (gameId) {
               drawGameLayer(ctx, gameId, gameStateRef.current, width, height);
             }
+            // Кот — только в «Приседаниях», и только когда игрок встал
+            // из приседа: рост счёта означает завершённое приседание.
+            if (gameId === 'squat') {
+              drawCatForSquat(ctx, frame, gameStateRef.current, cat, lastScoreRef, width, height);
+            }
           }
         }
       }
@@ -76,4 +95,47 @@ export function useRenderStage(options: RenderStageOptions): void {
     rafId = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(rafId);
   }, [canvasRef, frameSourceRef, frameRef, gameIdRef, gameStateRef, showSkeleton]);
+}
+
+/**
+ * Рисует кота над головой игрока и запускает удар, когда засчитано
+ * приседание.
+ */
+function drawCatForSquat(
+  ctx: CanvasRenderingContext2D,
+  frame: PoseFrame,
+  gameState: unknown,
+  cat: ReturnType<typeof createCatAnimation>,
+  lastScoreRef: { current: number },
+  width: number,
+  height: number,
+): void {
+  const state = gameState as { score?: number } | undefined;
+  const score = state?.score ?? 0;
+  const now = performance.now();
+
+  if (score > lastScoreRef.current) {
+    // Игрок встал — кот бьёт лапой.
+    triggerCatHit(cat, now);
+  }
+  lastScoreRef.current = score;
+
+  const phase = updateCatAnimation(cat, now);
+
+  // Позиция кота — над головой игрока.
+  const head = frame.landmarks[0];
+  if (!head) {
+    return;
+  }
+  const headX = head.x * width;
+  const headY = head.y * height;
+  const size = Math.max(48, Math.min(width, height) * 0.16);
+
+  drawCat(ctx, {
+    x: headX,
+    y: headY - size * 0.35,
+    size,
+    phase,
+    progress: hitProgress(cat, now),
+  });
 }
