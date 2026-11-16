@@ -56,15 +56,21 @@ export function updateCatAnimation(
 }
 
 /**
- * Прогресс удара: 0 — лапа поднята, 1 — лапа внизу (удар).
+ * Прогресс удара: 0 — бита поднята, 1 — бита внизу.
+ *
+ * В фазе отскока бита возвращается наверх: прогресс убывает.
  */
 export function hitProgress(animation: CatAnimation, now: number): number {
-  if (animation.phase !== 'hit') {
-    return animation.phase === 'recover' ? 1 : 0;
+  if (animation.phase === 'hit') {
+    const t = (now - animation.startedAt) / CAT_HIT_DURATION;
+    // Быстрый удар вниз и чуть более медленный возврат.
+    return t < 0.45 ? t / 0.45 : 1 - (t - 0.45) / 0.55;
   }
-  const t = (now - animation.startedAt) / CAT_HIT_DURATION;
-  // Быстрый удар вниз и чуть более медленный возврат.
-  return t < 0.45 ? t / 0.45 : 1 - (t - 0.45) / 0.55;
+  if (animation.phase === 'recover') {
+    const t = (now - animation.startedAt) / CAT_RECOVER_DURATION;
+    return 1 - Math.min(1, t);
+  }
+  return 0;
 }
 
 export interface CatDrawOptions {
@@ -83,6 +89,8 @@ export interface CatDrawOptions {
 const FUR = '#fbbf24';
 const FUR_DARK = '#d97706';
 const EAR_INNER = '#fde68a';
+const BAT = '#d6a15f';
+const BAT_DARK = '#8b5a2b';
 
 /**
  * Рисует кота в указанной позиции.
@@ -206,54 +214,68 @@ export function drawCat(
     }
   }
 
-  // --- Ударная лапа ---
-  // В покое лапа прижата к телу. При ударе она резко опускается вниз —
-  // именно это движение должно быть заметно.
-  const swinging = phase === 'hit';
-  const pawAngle = swinging
-    ? -Math.PI * 0.35 + progress * (Math.PI * 0.95)
-    : -Math.PI * 0.55;
-  const pawLength = half * (swinging ? 1.05 : 0.34);
+  // --- Бита в лапе ---
+  // Кот держит биту в лапе, и мы видим её сбоку — поэтому бита
+  // горизонтальная. При ударе кот опускает её сверху вниз.
   const shoulderX = x - half * 0.45;
   const shoulderY = bodyY - half * 0.28;
-  const pawX = shoulderX + Math.cos(pawAngle) * pawLength;
-  const pawY = shoulderY + Math.sin(pawAngle) * pawLength;
+  const gripX = shoulderX - half * 0.02;
+  // Бита поднята над головой и опускается до уровня тела — ход должен
+  // быть заметным.
+  const raisedY = headY - half * 0.5;
+  const loweredY = bodyY + half * 0.75;
+  const gripY = raisedY + (loweredY - raisedY) * progress;
 
-  // След от лапы — показывает направление удара.
-  if (swinging && progress > 0.1) {
-    ctx.strokeStyle = 'rgba(251, 191, 36, 0.35)';
-    ctx.lineWidth = Math.max(2, size * 0.12);
+  // Бита: горизонтальная палка, которую лапа держит за правый конец.
+  const batLength = half * 1.15;
+  const batThickness = Math.max(6, size * 0.09);
+  const batX = gripX - batLength;
+
+  // След от биты — показывает направление удара.
+  if (phase === 'hit' && progress > 0.05 && progress < 0.95) {
+    ctx.strokeStyle = 'rgba(146, 64, 14, 0.3)';
+    ctx.lineWidth = batThickness;
     ctx.beginPath();
-    ctx.moveTo(shoulderX, shoulderY);
-    ctx.lineTo(pawX, pawY);
+    ctx.moveTo(batX, raisedY);
+    ctx.lineTo(batX, loweredY);
     ctx.stroke();
   }
 
+  // Лапа держит биту.
   ctx.strokeStyle = FUR;
-  ctx.lineWidth = Math.max(3, size * 0.17);
+  ctx.lineWidth = Math.max(3, size * 0.16);
   ctx.beginPath();
   ctx.moveTo(shoulderX, shoulderY);
-  ctx.lineTo(pawX, pawY);
+  ctx.lineTo(gripX, gripY);
   ctx.stroke();
 
-  // Лапа — округлая, а не точка: так она читается как лапа, а не палка.
-  ctx.fillStyle = FUR;
+  // Сама бита.
+  ctx.fillStyle = BAT;
+  ctx.strokeStyle = BAT_DARK;
+  ctx.lineWidth = Math.max(1.5, size * 0.02);
   ctx.beginPath();
-  ctx.ellipse(pawX, pawY, half * 0.24, half * 0.2, pawAngle, 0, Math.PI * 2);
+  ctx.roundRect(
+    batX,
+    gripY - batThickness / 2,
+    batLength,
+    batThickness,
+    batThickness / 2,
+  );
   ctx.fill();
+  ctx.stroke();
 
-  // В момент удара — «звёздочки» вокруг лапы: удар должен читаться.
-  if (phase === 'hit' && progress > 0.3) {
-    const starAlpha = Math.min(1, (progress - 0.3) / 0.25);
+  // В момент удара — «звёздочки» у биты: удар должен читаться.
+  if (phase === 'hit' && progress > 0.8) {
+    const starAlpha = Math.min(1, (progress - 0.8) / 0.2);
     ctx.strokeStyle = `rgba(253, 230, 138, ${starAlpha})`;
     ctx.lineWidth = Math.max(2, size * 0.045);
     for (let i = 0; i < 7; i += 1) {
       const angle = (i / 7) * Math.PI * 2 + progress * 2;
-      const r1 = half * 0.32;
-      const r2 = half * 0.52;
+      const r1 = half * 0.3;
+      const r2 = half * 0.5;
       ctx.beginPath();
-      ctx.moveTo(pawX + Math.cos(angle) * r1, pawY + Math.sin(angle) * r1);
-      ctx.lineTo(pawX + Math.cos(angle) * r2, pawY + Math.sin(angle) * r2);
+      ctx.moveTo(gripX + Math.cos(angle) * r1, gripY + Math.sin(angle) * r1);
+      ctx.lineTo(gripX + Math.cos(angle) * r2, gripY + Math.sin(angle) * r2);
       ctx.stroke();
     }
   }
