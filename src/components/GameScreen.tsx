@@ -81,7 +81,7 @@ export function GameScreen({
     gameId === 'squat' &&
     (session.state as { phase?: string }).phase === 'calibrating'
       ? 'Встаньте ровно — идёт калибровка'
-      : gameId === 'dodge' &&
+      : gameId === 'donuts' &&
           (session.state as { calibrating?: boolean }).calibrating
         ? 'Встаньте ровно — идёт калибровка'
         : null;

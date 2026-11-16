@@ -2,8 +2,8 @@ import { PoseLandmark, isReliable } from '../pose/landmarks';
 import type { Landmark, PoseFrame } from '../pose/poseTypes';
 import type { BaseGameState, GameModule } from './gameModule';
 
-/** Падающий предмет. */
-export interface FallingObject {
+/** Падающий пончик. */
+export interface FallingDonut {
   id: number;
   /** Горизонтальная позиция в нормализованных координатах 0..1. */
   x: number;
@@ -11,41 +11,47 @@ export interface FallingObject {
   y: number;
   /** Скорость падения (доля экрана в секунду). */
   speed: number;
+  /** С какой стороны пришёл пончик: -1 — слева, 1 — справа. */
+  side: -1 | 1;
 }
 
-export interface DodgeGameState extends BaseGameState {
+export interface DonutGameState extends BaseGameState {
   /** Текущий наклон корпуса в градусах: <0 — влево, >0 — вправо. */
   tilt: number;
-  /** Горизонтальная позиция игрока: 0 — левый край, 1 — правый. */
-  playerX: number;
+  /** Горизонтальная позиция рта в нормализованных координатах. */
+  mouthX: number;
+  /** Вертикальная позиция рта в нормализованных координатах. */
+  mouthY: number;
   /** Оставшиеся жизни. */
   lives: number;
-  /** Сколько предметов благополучно долетело до низа. */
-  dodged: number;
-  /** Падающие предметы. */
-  objects: FallingObject[];
+  /** Сколько пончиков поймано. */
+  caught: number;
+  /** Сколько пончиков упало мимо. */
+  missed: number;
+  /** Падающие пончики. */
+  donuts: FallingDonut[];
   /** Опорный наклон в момент калибровки. */
   referenceTilt: number;
-  /** Опорная позиция игрока в момент калибровки. */
-  referenceX: number;
+  /** Опорное горизонтальное положение рта в момент калибровки. */
+  referenceMouthX: number;
   /** Кадры, накопленные для калибровки. */
   calibrationSamples: number[];
   /** true, пока идёт калибровка. */
   calibrating: boolean;
-  /** Сколько осталось до следующего предмета, мс. */
+  /** Сколько осталось до следующего пончика, мс. */
   nextSpawnIn: number;
-  /** Идентификатор следующего предмета. */
-  nextObjectId: number;
+  /** Идентификатор следующего пончика. */
+  nextDonutId: number;
+  /** С какой стороны придёт следующий пончик: -1 — слева, 1 — справа. */
+  nextSide: -1 | 1;
 }
 
-export interface DodgeGameOptions {
+export interface DonutGameOptions {
   durationMs?: number;
   lives?: number;
   /** Сколько кадров усреднять для калибровки. */
   calibrationFrames?: number;
-  /** Генератор псевдослучайных чисел (для детерминированных тестов). */
-  random?: () => number;
-  /** Максимальный наклон, при котором игрок у края экрана. */
+  /** Максимальный наклон, при котором рот у края экрана. */
   maxTiltDegrees?: number;
 }
 
@@ -54,95 +60,100 @@ const DEFAULT_LIVES = 3;
 const DEFAULT_CALIBRATION_FRAMES = 20;
 const DEFAULT_MAX_TILT = 30;
 
-/** Насколько предмет «широк» для попадания (в нормализованных единицах). */
-export const DODGE_HIT_RADIUS = 0.09;
+/** Радиус, в котором пончик считается пойманным ртом. */
+export const DONUT_CATCH_RADIUS = 0.13;
 
-/** Высота, на которой предмет пересекает полосу игрока. */
-export const PLAYER_LINE = 0.94;
+/** Насколько далеко от рта появляется пончик (в долях ширины экрана). */
+export const DONUT_SPAWN_OFFSET = 0.3;
 
 /** Скорость падения в начале раунда. */
-const START_SPEED = 0.25;
+const START_SPEED = 0.3;
 
 /** Насколько скорость растёт к концу раунда. */
-const SPEED_GROWTH = 0.55;
+const SPEED_GROWTH = 0.5;
 
-/** Интервал между предметами в начале раунда, мс. */
-const START_INTERVAL = 1400;
+/** Интервал между пончиками в начале раунда, мс. */
+const START_INTERVAL = 1500;
 
-/** Интервал между предметами в конце раунда, мс. */
-const END_INTERVAL = 700;
+/** Интервал между пончиками в конце раунда, мс. */
+const END_INTERVAL = 800;
 
 /**
- * Игра «Уклонение»: уходи от падающих предметов, наклоняясь корпусом.
+ * Игра «Пончики»: лови пончики ртом.
  *
- * Наклон корпуса задаёт горизонтальную позицию игрока: наклонился
- * влево — сдвинулся влево. Предметы падают сверху, нужно пропустить
- * каждый мимо. Столкновение отнимает жизнь, предмет, долетевший до
- * низа экрана, засчитывается в счёт.
+ * Пончики падают по очереди — сначала слева, потом справа, и так далее.
+ * Игрок управляет положением рта наклоном корпуса и должен подставить
+ * голову под падающий пончик.
+ *
+ * Управление остаётся наклоном корпуса: смысл упражнения — в наклонах.
  */
-export class DodgeGame implements GameModule<DodgeGameState> {
-  readonly id = 'dodge';
-  readonly title = 'Уклонение';
-  readonly description = 'Уклоняйся корпусом от падающих предметов';
+export class DonutGame implements GameModule<DonutGameState> {
+  readonly id = 'donuts';
+  readonly title = 'Пончики';
+  readonly description = 'Лови пончики ртом — наклоняйся влево и вправо';
 
   private readonly durationMs: number;
   private readonly lives: number;
   private readonly calibrationFrames: number;
-  private readonly random: () => number;
   private readonly maxTilt: number;
 
-  constructor(options: DodgeGameOptions = {}) {
+  constructor(options: DonutGameOptions = {}) {
     this.durationMs = options.durationMs ?? DEFAULT_DURATION_MS;
     this.lives = options.lives ?? DEFAULT_LIVES;
     this.calibrationFrames = options.calibrationFrames ?? DEFAULT_CALIBRATION_FRAMES;
-    this.random = options.random ?? Math.random;
     this.maxTilt = options.maxTiltDegrees ?? DEFAULT_MAX_TILT;
   }
 
-  createState(): DodgeGameState {
+  createState(): DonutGameState {
     return {
       score: 0,
       durationMs: this.durationMs,
       elapsedMs: 0,
       status: 'idle',
       tilt: 0,
-      playerX: 0.5,
+      mouthX: 0.5,
+      mouthY: 0.3,
       lives: this.lives,
-      dodged: 0,
-      objects: [],
+      caught: 0,
+      missed: 0,
+      donuts: [],
       referenceTilt: 0,
-      referenceX: 0.5,
+      referenceMouthX: 0.5,
       calibrationSamples: [],
       calibrating: true,
       nextSpawnIn: 0,
-      nextObjectId: 1,
+      nextDonutId: 1,
+      nextSide: 1,
     };
   }
 
-  isReady(state: DodgeGameState): boolean {
+  isReady(state: DonutGameState): boolean {
     return !state.calibrating;
   }
 
   /** Запускает раунд: счёт и жизни обнуляются, начинается калибровка. */
-  start(state: DodgeGameState): void {
+  start(state: DonutGameState): void {
     state.status = 'running';
     state.elapsedMs = 0;
     state.score = 0;
-    state.dodged = 0;
+    state.caught = 0;
+    state.missed = 0;
     state.lives = this.lives;
-    state.objects = [];
+    state.donuts = [];
     state.tilt = 0;
-    state.playerX = 0.5;
+    state.mouthX = 0.5;
+    state.mouthY = 0.3;
     state.referenceTilt = 0;
-    state.referenceX = 0.5;
+    state.referenceMouthX = 0.5;
     state.calibrationSamples = [];
     state.calibrating = true;
     state.nextSpawnIn = 0;
-    state.nextObjectId = 1;
+    state.nextDonutId = 1;
+    state.nextSide = 1;
   }
 
 
-  applyFrame(state: DodgeGameState, frame: PoseFrame): void {
+  applyFrame(state: DonutGameState, frame: PoseFrame): void {
     if (state.status !== 'running' || frame.empty) {
       return;
     }
@@ -153,8 +164,21 @@ export class DodgeGame implements GameModule<DodgeGameState> {
     }
     state.tilt = tilt;
 
+    // Положение головы из позы: по вертикали рот всегда там, где голова,
+    // а по горизонтали им управляет наклон корпуса.
+    const nose = frame.landmarks[PoseLandmark.NOSE];
+    const noseOk = isReliable(nose);
+    if (noseOk) {
+      state.mouthY = nose.y;
+    }
+
     if (state.calibrating) {
       state.calibrationSamples.push(tilt);
+      // Опорное положение рта — реальная координата носа в начале
+      // калибровки: от неё игрок будет отклоняться наклоном.
+      if (state.calibrationSamples.length === 1 && noseOk) {
+        state.referenceMouthX = nose.x;
+      }
       if (state.calibrationSamples.length >= this.calibrationFrames) {
         state.referenceTilt = average(state.calibrationSamples);
         state.calibrating = false;
@@ -163,12 +187,13 @@ export class DodgeGame implements GameModule<DodgeGameState> {
       return;
     }
 
-    // Горизонтальная позиция игрока: наклон корпуса от опорного.
+    // Горизонтальное положение рта задаёт наклон корпуса: наклонился
+    // влево — голова (и рот) сместилась влево. Это и есть управление.
     const offset = (tilt - state.referenceTilt) / this.maxTilt;
-    state.playerX = clamp(state.referenceX + offset * 0.35, 0.08, 0.92);
+    state.mouthX = clamp(state.referenceMouthX + offset * 0.3, 0.1, 0.9);
   }
 
-  advance(state: DodgeGameState, deltaMs: number): void {
+  advance(state: DonutGameState, deltaMs: number): void {
     if (state.status !== 'running') {
       return;
     }
@@ -176,71 +201,80 @@ export class DodgeGame implements GameModule<DodgeGameState> {
     if (state.elapsedMs >= this.durationMs) {
       state.elapsedMs = this.durationMs;
       state.status = 'finished';
-      state.objects = [];
+      state.donuts = [];
       return;
     }
 
-    // Во время калибровки предметы не падают.
+    // Во время калибровки пончики не падают.
     if (state.calibrating) {
       return;
     }
 
-    // Двигаем предметы: скорость задана в долях экрана в секунду.
-    for (const object of state.objects) {
-      object.y += object.speed * (deltaMs / 1000);
+    // Двигаем пончики: скорость задана в долях экрана в секунду.
+    for (const donut of state.donuts) {
+      donut.y += donut.speed * (deltaMs / 1000);
     }
 
-    // Разбираем предметы, пересёкшие полосу игрока.
-    const remaining: FallingObject[] = [];
-    for (const object of state.objects) {
-      if (object.y < PLAYER_LINE) {
-        remaining.push(object);
+    // Разбираем пончики, долетевшие до уровня рта.
+    const remaining: FallingDonut[] = [];
+    for (const donut of state.donuts) {
+      if (donut.y < state.mouthY) {
+        remaining.push(donut);
         continue;
       }
 
-      // Предмет пересёк полосу: если он над игроком — это удар,
-      // иначе — успешное уклонение.
-      if (Math.abs(object.x - state.playerX) <= DODGE_HIT_RADIUS) {
+      // Пончик дошёл до рта: поймали или промахнулись.
+      if (Math.abs(donut.x - state.mouthX) <= DONUT_CATCH_RADIUS) {
+        state.caught += 1;
+        state.score += 1;
+      } else {
+        state.missed += 1;
         state.lives -= 1;
         if (state.lives <= 0) {
           state.lives = 0;
           state.status = 'finished';
         }
-      } else {
-        state.dodged += 1;
-        state.score += 1;
       }
     }
-    state.objects = remaining;
+    state.donuts = remaining;
 
-    // Появился ли новый предмет.
+    // Появился ли новый пончик.
     state.nextSpawnIn -= deltaMs;
     if (state.nextSpawnIn <= 0) {
-      state.objects.push(this.spawnObject(state));
+      state.donuts.push(this.spawnDonut(state));
       state.nextSpawnIn = this.spawnInterval(state);
     }
   }
 
   /** Скорость падения с учётом прошедшего времени раунда. */
-  private currentSpeed(state: DodgeGameState): number {
+  private currentSpeed(state: DonutGameState): number {
     const progress = state.durationMs > 0 ? state.elapsedMs / state.durationMs : 0;
     return START_SPEED + SPEED_GROWTH * progress;
   }
 
   /** Интервал между предметами: к концу раунда предметы падают чаще. */
-  private spawnInterval(state: DodgeGameState): number {
+  private spawnInterval(state: DonutGameState): number {
     const progress = state.durationMs > 0 ? state.elapsedMs / state.durationMs : 0;
     return START_INTERVAL + (END_INTERVAL - START_INTERVAL) * progress;
   }
 
-  private spawnObject(state: DodgeGameState): FallingObject {
-    const id = state.nextObjectId;
-    state.nextObjectId += 1;
+  private spawnDonut(state: DonutGameState): FallingDonut {
+    const id = state.nextDonutId;
+    state.nextDonutId += 1;
+
+    // Пончики приходят по очереди: сначала справа, потом слева, и так
+    // далее. Позиция — относительно рта на момент появления.
+    const side = state.nextSide;
+    state.nextSide = side === 1 ? -1 : 1;
+
+    const x = clamp(state.mouthX + side * DONUT_SPAWN_OFFSET, 0.05, 0.95);
+
     return {
       id,
-      x: 0.08 + this.random() * 0.84,
+      x,
       y: -0.05,
       speed: this.currentSpeed(state),
+      side,
     };
   }
 }
@@ -291,3 +325,4 @@ export function average(values: readonly number[]): number {
   }
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
+

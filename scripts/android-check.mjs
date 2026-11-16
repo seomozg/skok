@@ -108,8 +108,8 @@ async function main() {
   // 2. Запускаем игру. Кнопки в меню идут в порядке: СпайдерМэн, Приседания.
   // Важно: кликаем сразу нужную кнопку — после первого клика мы уже
   // на игровом экране, и кнопок меню больше нет.
-  // Порядок кнопок в меню: СпайдерМэн, Приседания, Уклонение.
-  const gameIndex = GAME === 'squat' ? 1 : GAME === 'dodge' ? 2 : 0;
+  // Порядок кнопок в меню: СпайдерМэн, Приседания, Пончики.
+  const gameIndex = GAME === 'squat' ? 1 : GAME === 'donuts' ? 2 : 0;
   const started = await evaluate(
     `(() => { const list = [...document.querySelectorAll('.button--game')]; const el = list[${gameIndex}]; if (!el) return false; el.click(); return true; })()`,
   );

@@ -1,4 +1,4 @@
-import type { DodgeGameState } from '../domain/games/dodgeGame';
+import type { DonutGameState } from '../domain/games/donutGame';
 import type { ReactionGameState } from '../domain/games/reactionGame';
 import type { SquatGameState } from '../domain/games/squatGame';
 
@@ -22,8 +22,8 @@ export function drawGameLayer(
     case 'squat':
       drawSquatLayer(ctx, state as SquatGameState, width, height);
       break;
-    case 'dodge':
-      drawDodgeLayer(ctx, state as DodgeGameState, width, height);
+    case 'donuts':
+      drawDonutLayer(ctx, state as DonutGameState, width, height);
       break;
     default:
       break;
@@ -32,41 +32,44 @@ export function drawGameLayer(
 }
 
 /**
- * Рисует «Уклонение»: падающие предметы и игрока внизу.
+ * Рисует «Пончики»: падающие пончики и рот игрока.
  */
-function drawDodgeLayer(
+function drawDonutLayer(
   ctx: CanvasRenderingContext2D,
-  state: DodgeGameState,
+  state: DonutGameState,
   width: number,
   height: number,
 ): void {
-  // Полоса игрока внизу экрана.
-  const playerWidth = width * 0.16;
-  const playerHeight = Math.max(10, height * 0.02);
-  const playerX = state.playerX * width - playerWidth / 2;
-  const playerY = height * 0.94 - playerHeight;
+  // Рот игрока: кольцо там, где должен оказаться пойманный пончик.
+  const mouthX = state.mouthX * width;
+  const mouthY = state.mouthY * height;
+  const mouthR = Math.max(12, width * 0.045);
 
-  ctx.fillStyle = 'rgba(94, 234, 212, 0.25)';
-  ctx.strokeStyle = '#5eead4';
+  ctx.strokeStyle = 'rgba(94, 234, 212, 0.9)';
   ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.roundRect(playerX, playerY, playerWidth, playerHeight, playerHeight / 2);
-  ctx.fill();
+  ctx.arc(mouthX, mouthY, mouthR, 0, Math.PI * 2);
   ctx.stroke();
 
-  // Падающие предметы.
-  for (const object of state.objects) {
-    const cx = object.x * width;
-    const cy = object.y * height;
-    const r = Math.max(8, width * 0.028);
+  // Падающие пончики: бублик с дыркой.
+  for (const donut of state.donuts) {
+    const cx = donut.x * width;
+    const cy = donut.y * height;
+    const r = Math.max(10, width * 0.035);
 
-    ctx.fillStyle = '#f43f5e';
-    ctx.strokeStyle = '#fecdd3';
+    ctx.fillStyle = '#f59e0b';
+    ctx.strokeStyle = '#b45309';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+
+    // Дырка — отличить пончик от обычного шарика.
+    ctx.fillStyle = 'rgba(15, 16, 32, 0.85)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 0.35, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   // Жизни — в левом верхнем углу игрового поля.

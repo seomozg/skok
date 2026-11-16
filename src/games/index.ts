@@ -1,5 +1,5 @@
 import type { GameModule } from '../domain/games/gameModule';
-import { DodgeGame } from '../domain/games/dodgeGame';
+import { DonutGame } from '../domain/games/donutGame';
 import { ReactionGame } from '../domain/games/reactionGame';
 import { SquatGame } from '../domain/games/squatGame';
 
@@ -25,7 +25,7 @@ export const NOOP_GAME: GameModule<any> = {
 export const GAME_MODULES: ReadonlyArray<GameModule<any>> = [
   new ReactionGame(),
   new SquatGame(),
-  new DodgeGame(),
+  new DonutGame(),
 ];
 
 /** Находит игру по идентификатору. */
