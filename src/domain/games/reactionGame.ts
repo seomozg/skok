@@ -41,7 +41,7 @@ const MARGIN = 0.12;
  */
 export class ReactionGame implements GameModule<ReactionGameState> {
   readonly id = 'reaction';
-  readonly title = 'Реакция';
+  readonly title = 'СпайдерМэн';
   readonly description = 'Попадай кистью в мишень как можно быстрее';
 
   private readonly durationMs: number;
