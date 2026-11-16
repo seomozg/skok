@@ -81,7 +81,10 @@ export function GameScreen({
     gameId === 'squat' &&
     (session.state as { phase?: string }).phase === 'calibrating'
       ? 'Встаньте ровно — идёт калибровка'
-      : null;
+      : gameId === 'dodge' &&
+          (session.state as { calibrating?: boolean }).calibrating
+        ? 'Встаньте ровно — идёт калибровка'
+        : null;
 
   /** Ручной поворот картинки: запасной вариант к автоопределению ориентации. */
   const rotate = useCallback(() => {

@@ -1,3 +1,4 @@
+import type { DodgeGameState } from '../domain/games/dodgeGame';
 import type { ReactionGameState } from '../domain/games/reactionGame';
 import type { SquatGameState } from '../domain/games/squatGame';
 
@@ -21,10 +22,68 @@ export function drawGameLayer(
     case 'squat':
       drawSquatLayer(ctx, state as SquatGameState, width, height);
       break;
+    case 'dodge':
+      drawDodgeLayer(ctx, state as DodgeGameState, width, height);
+      break;
     default:
       break;
   }
   ctx.restore();
+}
+
+/**
+ * Рисует «Уклонение»: падающие предметы и игрока внизу.
+ */
+function drawDodgeLayer(
+  ctx: CanvasRenderingContext2D,
+  state: DodgeGameState,
+  width: number,
+  height: number,
+): void {
+  // Полоса игрока внизу экрана.
+  const playerWidth = width * 0.16;
+  const playerHeight = Math.max(10, height * 0.02);
+  const playerX = state.playerX * width - playerWidth / 2;
+  const playerY = height * 0.94 - playerHeight;
+
+  ctx.fillStyle = 'rgba(94, 234, 212, 0.25)';
+  ctx.strokeStyle = '#5eead4';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.roundRect(playerX, playerY, playerWidth, playerHeight, playerHeight / 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Падающие предметы.
+  for (const object of state.objects) {
+    const cx = object.x * width;
+    const cy = object.y * height;
+    const r = Math.max(8, width * 0.028);
+
+    ctx.fillStyle = '#f43f5e';
+    ctx.strokeStyle = '#fecdd3';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  // Жизни — в левом верхнем углу игрового поля.
+  const lifeR = Math.max(6, width * 0.018);
+  for (let i = 0; i < state.lives; i += 1) {
+    ctx.fillStyle = '#f43f5e';
+    ctx.beginPath();
+    ctx.arc(lifeR * 1.6 + i * lifeR * 2.6, lifeR * 1.6, lifeR, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  if (state.calibrating) {
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = `${Math.round(height * 0.035)}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('Встаньте ровно для калибровки…', width / 2, height * 0.9);
+  }
 }
 
 function drawReactionLayer(
